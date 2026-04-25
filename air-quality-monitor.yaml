@@ -4,8 +4,8 @@ esphome:
   on_boot:
     priority: -100
     then:
-      - delay: 5s
-      - rtttl.play: "boot:d=32,o=6,b=300:g,b,d7"
+      - display.page.show: page_splash
+      - component.update: oled_display
 
 esp32:
   board: esp32-c3-devkitm-1
@@ -75,6 +75,20 @@ rtttl:
   output: buzzer_output
   id: buzzer
 
+globals:
+  - id: boot_fails
+    type: int
+    restore_value: true
+    initial_value: '0'
+  - id: booted
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  - id: boot_phase
+    type: int
+    restore_value: false
+    initial_value: '0'
+
 # Fonts for OLED — pixel fonts for 8-bit look
 font:
   - file: "gfonts://Silkscreen"
@@ -95,94 +109,84 @@ display:
     rotation: 180°
     id: oled_display
     update_interval: 3s
-    lambda: |-
-      int w = 128;
-      // Air quality score for face expression
-      int score = 0;
-      if (id(co2_sensor).state > 1000) score++;
-      if (id(co2_sensor).state > 1500) score++;
-      if (!isnan(id(iaq).state) && id(iaq).state > 150) score++;
-      if (id(pm25).state > 35) score++;
+    pages:
+      - id: page_splash
+        lambda: |-
+          int w = 128;
 
-      // === PIXEL ART FACE (22x22 at top-left) ===
-      it.rectangle(0, 0, 22, 22);
-      if (score >= 4) {
-        // X_X dead eyes
-        it.line(5, 5, 9, 9); it.line(5, 9, 9, 5);
-        it.line(12, 5, 16, 9); it.line(12, 9, 16, 5);
-        // O mouth
-        it.rectangle(7, 14, 8, 6);
-      } else if (score >= 3) {
-        // Worried eyes
-        it.filled_rectangle(5, 6, 4, 4);
-        it.filled_rectangle(13, 6, 4, 4);
-        // Frown
-        it.filled_rectangle(6, 17, 10, 2);
-        it.filled_rectangle(5, 15, 2, 2);
-        it.filled_rectangle(15, 15, 2, 2);
-      } else if (score >= 2) {
-        // Normal eyes
-        it.filled_rectangle(5, 6, 4, 4);
-        it.filled_rectangle(13, 6, 4, 4);
-        // Flat mouth
-        it.filled_rectangle(6, 15, 10, 2);
-      } else if (score >= 1) {
-        // Happy eyes
-        it.filled_rectangle(5, 6, 4, 4);
-        it.filled_rectangle(13, 6, 4, 4);
-        // Small smile
-        it.filled_rectangle(6, 14, 10, 2);
-        it.filled_rectangle(5, 16, 2, 2);
-        it.filled_rectangle(15, 16, 2, 2);
-      } else {
-        // Ecstatic eyes (^_^)
-        it.filled_rectangle(4, 8, 6, 2);
-        it.filled_rectangle(4, 6, 2, 2);
-        it.filled_rectangle(8, 6, 2, 2);
-        it.filled_rectangle(12, 8, 6, 2);
-        it.filled_rectangle(12, 6, 2, 2);
-        it.filled_rectangle(16, 6, 2, 2);
-        // Big grin
-        it.filled_rectangle(5, 14, 12, 2);
-        it.filled_rectangle(4, 16, 2, 2);
-        it.filled_rectangle(16, 16, 2, 2);
-      }
+          if (id(boot_fails) >= 3) {
+            it.printf(w / 2, 10, id(font_mid), TextAlign::TOP_CENTER, "Hardware");
+            it.printf(w / 2, 26, id(font_mid), TextAlign::TOP_CENTER, "Error");
+            it.line(0, 42, w, 42);
+            it.printf(0, 48, id(font_sm), "SenseAir S88");
+            it.printf(w, 48, id(font_sm), TextAlign::TOP_RIGHT, "FAIL");
+            it.printf(0, 60, id(font_sm), "PMS5003");
+            it.printf(w, 60, id(font_sm), TextAlign::TOP_RIGHT, "FAIL");
+            it.printf(0, 72, id(font_sm), "BME690");
+            it.printf(w, 72, id(font_sm), TextAlign::TOP_RIGHT, "FAIL");
+            it.printf(w / 2, 92, id(font_sm), TextAlign::TOP_CENTER, "3 boot attempts failed");
+            it.printf(w / 2, 108, id(font_sm), TextAlign::TOP_CENTER, "Check wiring, reboot");
+            return;
+          }
 
-      // === CO2 hero (right of face) ===
-      it.printf(26, 0, id(font_mid), "CO2");
-      it.printf(w, 0, id(font_big), TextAlign::TOP_RIGHT, "%.0f", id(co2_sensor).state);
+          it.printf(w / 2, 4, id(font_mid), TextAlign::TOP_CENTER, "Air Quality");
+          it.printf(w / 2, 18, id(font_mid), TextAlign::TOP_CENTER, "Monitor");
 
-      // === Separator ===
-      it.line(0, 24, w, 24);
+          int phase = id(boot_phase);
+          const char *phases[] = {"Waiting", "Testing", "Validating", "Ready"};
+          it.printf(w / 2, 36, id(font_sm), TextAlign::TOP_CENTER, "%s", phases[phase < 4 ? phase : 3]);
 
-      // === Key metrics (font_mid, well spaced) ===
-      if (isnan(id(iaq).state)) {
-        it.printf(0, 28, id(font_mid), "IAQ  --");
-      } else {
-        it.printf(0, 28, id(font_mid), "IAQ  %.0f", id(iaq).state);
-      }
+          it.line(0, 48, w, 48);
 
-      it.printf(0, 44, id(font_mid), "PM2.5  %.0f", id(pm25).state);
+          bool co2_has = !isnan(id(co2_sensor).state) && id(co2_sensor).state > 0;
+          bool pm_has = !isnan(id(pm25).state);
+          bool bme_has = !isnan(id(temp_bme).state);
 
-      it.printf(0, 60, id(font_mid), "%.1fC  %.0f%%", id(temp_bme).state, id(hum_bme).state);
+          auto status = [&](bool has, bool sane, int ph) -> const char* {
+            if (ph < 1) return "Waiting";
+            if (!has) return "Testing";
+            if (ph < 2) return "Connected";
+            if (!sane) return "Bad Value";
+            return "Ready";
+          };
 
-      it.printf(0, 76, id(font_mid), "%.0f hPa", id(pressure_sensor).state);
-      it.printf(w, 76, id(font_mid), TextAlign::TOP_RIGHT, "%.0f lx", id(light_sensor).state);
+          float co2v = id(co2_sensor).state;
+          float tmpv = id(temp_bme).state;
+          float humv = id(hum_bme).state;
+          float pmv = id(pm25).state;
+          float prsv = id(pressure_sensor).state;
 
-      // === Separator ===
-      it.line(0, 92, w, 92);
+          bool co2_sane = co2_has && co2v >= 300 && co2v <= 5000;
+          bool pm_sane = pm_has && pmv >= 0 && pmv <= 1000;
+          bool bme_sane = bme_has && tmpv >= -40 && tmpv <= 85 && humv >= 0 && humv <= 100 && prsv >= 800 && prsv <= 1200;
 
-      // === Status (centered, prominent) ===
-      it.printf(w / 2, 96, id(font_big), TextAlign::TOP_CENTER, "%s", id(air_quality).state.c_str());
-      it.printf(w / 2, 116, id(font_sm), TextAlign::TOP_CENTER, "CO2:%s  PM:%s", id(co2_status).state.c_str(), id(pm25_status).state.c_str());
+          it.printf(0, 54, id(font_sm), "SenseAir S88");
+          it.printf(w, 54, id(font_sm), TextAlign::TOP_RIGHT, "%s", status(co2_has, co2_sane, phase));
+          it.printf(0, 68, id(font_sm), "PMS5003");
+          it.printf(w, 68, id(font_sm), TextAlign::TOP_RIGHT, "%s", status(pm_has, pm_sane, phase));
+          it.printf(0, 82, id(font_sm), "BME690");
+          it.printf(w, 82, id(font_sm), TextAlign::TOP_RIGHT, "%s", status(bme_has, bme_sane, phase));
 
-interval:
-  - interval: 60s
-    then:
-      - lambda: |-
-          static uint32_t boot_time = millis();
-          if (millis() - boot_time < 90000) return;
-          if (isnan(id(co2_sensor).state) || isnan(id(pm25).state)) return;
+          int ready = co2_sane + pm_sane + bme_sane;
+          int bar_w = 120;
+          int fill = 0;
+          if (phase == 0) fill = 0;
+          else if (phase == 1) fill = (co2_has + pm_has + bme_has) * bar_w / 6;
+          else if (phase == 2) fill = bar_w / 2 + ready * bar_w / 6;
+          else fill = bar_w;
+          it.rectangle(4, 100, bar_w, 8);
+          if (fill > 0) it.filled_rectangle(4, 100, fill, 8);
+
+          if (phase >= 2) {
+            it.printf(0, 114, id(font_sm), "CO2:%.0f", co2v);
+            it.printf(w / 2, 114, id(font_sm), TextAlign::TOP_CENTER, "T:%.0f", tmpv);
+            it.printf(w, 114, id(font_sm), TextAlign::TOP_RIGHT, "PM:%.0f", pmv);
+          }
+
+      - id: page_face
+        lambda: |-
+          int w = 128;
+          int fx = 44, fy = 2;
           int score = 0;
           if (id(co2_sensor).state > 1000) score++;
           if (id(co2_sensor).state > 1500) score++;
@@ -190,6 +194,217 @@ interval:
           if (id(pm25).state > 55) score++;
           if (!isnan(id(iaq).state) && id(iaq).state > 150) score++;
           if (!isnan(id(iaq).state) && id(iaq).state > 250) score++;
+
+          it.rectangle(fx, fy, 40, 40);
+          if (score >= 5) {
+            // X_X dead
+            it.line(fx+8, fy+10, fx+14, fy+16); it.line(fx+8, fy+16, fx+14, fy+10);
+            it.line(fx+26, fy+10, fx+32, fy+16); it.line(fx+26, fy+16, fx+32, fy+10);
+            it.rectangle(fx+14, fy+26, 12, 8);
+          } else if (score >= 4) {
+            // >_< distressed
+            it.line(fx+8, fy+11, fx+14, fy+14); it.line(fx+8, fy+17, fx+14, fy+14);
+            it.line(fx+32, fy+11, fx+26, fy+14); it.line(fx+32, fy+17, fx+26, fy+14);
+            it.filled_rectangle(fx+12, fy+28, 16, 2);
+            it.filled_rectangle(fx+10, fy+26, 4, 2);
+            it.filled_rectangle(fx+26, fy+26, 4, 2);
+            it.filled_rectangle(fx+14, fy+30, 4, 2);
+            it.filled_rectangle(fx+22, fy+30, 4, 2);
+          } else if (score >= 3) {
+            // :( worried + sweat drop
+            it.filled_rectangle(fx+10, fy+11, 6, 6);
+            it.filled_rectangle(fx+24, fy+11, 6, 6);
+            it.filled_rectangle(fx+12, fy+30, 16, 2);
+            it.filled_rectangle(fx+10, fy+28, 4, 2);
+            it.filled_rectangle(fx+26, fy+28, 4, 2);
+            it.filled_rectangle(fx+34, fy+8, 2, 4);
+            it.filled_rectangle(fx+33, fy+12, 4, 2);
+          } else if (score >= 2) {
+            // :| neutral
+            it.filled_rectangle(fx+10, fy+11, 6, 6);
+            it.filled_rectangle(fx+24, fy+11, 6, 6);
+            it.filled_rectangle(fx+12, fy+28, 16, 2);
+          } else if (score >= 1) {
+            // :) happy
+            it.filled_rectangle(fx+10, fy+11, 6, 6);
+            it.filled_rectangle(fx+24, fy+11, 6, 6);
+            it.filled_rectangle(fx+12, fy+26, 16, 2);
+            it.filled_rectangle(fx+10, fy+28, 4, 2);
+            it.filled_rectangle(fx+26, fy+28, 4, 2);
+          } else {
+            // ^_^ ecstatic
+            it.line(fx+8, fy+16, fx+13, fy+10); it.line(fx+13, fy+10, fx+18, fy+16);
+            it.line(fx+22, fy+16, fx+27, fy+10); it.line(fx+27, fy+10, fx+32, fy+16);
+            it.filled_rectangle(fx+10, fy+26, 20, 2);
+            it.filled_rectangle(fx+8, fy+28, 4, 2);
+            it.filled_rectangle(fx+28, fy+28, 4, 2);
+          }
+
+          it.line(0, 46, w, 46);
+
+          it.printf(w / 2, 50, id(font_mid), TextAlign::TOP_CENTER, "CO2");
+          it.printf(w / 2, 64, id(font_big), TextAlign::TOP_CENTER, "%.0f", id(co2_sensor).state);
+
+          it.line(0, 88, w, 88);
+
+          it.printf(0, 92, id(font_mid), "IAQ");
+          if (isnan(id(iaq).state)) {
+            it.printf(0, 106, id(font_mid), "--");
+          } else {
+            it.printf(0, 106, id(font_mid), "%.0f", id(iaq).state);
+          }
+          it.printf(w, 92, id(font_mid), TextAlign::TOP_RIGHT, "PM2.5");
+          it.printf(w, 106, id(font_mid), TextAlign::TOP_RIGHT, "%.0f", id(pm25).state);
+
+          it.printf(w / 2, 92, id(font_mid), TextAlign::TOP_CENTER, "Temp");
+          it.printf(w / 2, 106, id(font_mid), TextAlign::TOP_CENTER, "%.1f C", id(temp_bme).state);
+
+      - id: page_air
+        lambda: |-
+          int w = 128;
+          it.printf(0, 2, id(font_mid), "Air");
+          it.line(0, 16, w, 16);
+
+          it.printf(0, 20, id(font_sm), "CO2");
+          it.printf(w, 20, id(font_sm), TextAlign::TOP_RIGHT, "%.0f ppm", id(co2_sensor).state);
+          it.printf(0, 32, id(font_sm), "eCO2");
+          it.printf(w, 32, id(font_sm), TextAlign::TOP_RIGHT, "%.0f ppm", id(co2_eq).state);
+          it.printf(0, 44, id(font_sm), "IAQ");
+          if (isnan(id(iaq).state)) {
+            it.printf(w, 44, id(font_sm), TextAlign::TOP_RIGHT, "--");
+          } else {
+            it.printf(w, 44, id(font_sm), TextAlign::TOP_RIGHT, "%.0f", id(iaq).state);
+          }
+          it.printf(0, 56, id(font_sm), "Static IAQ");
+          it.printf(w, 56, id(font_sm), TextAlign::TOP_RIGHT, "%.0f", id(static_iaq).state);
+          it.printf(0, 68, id(font_sm), "Gas Res");
+          it.printf(w, 68, id(font_sm), TextAlign::TOP_RIGHT, "%.0f", id(gas_res).state);
+          it.printf(0, 80, id(font_sm), "Gas Pct");
+          it.printf(w, 80, id(font_sm), TextAlign::TOP_RIGHT, "%.1f%%", id(gas_pct).state);
+          it.printf(0, 92, id(font_sm), "PM 1.0");
+          it.printf(w, 92, id(font_sm), TextAlign::TOP_RIGHT, "%.0f", id(pm10_raw).state);
+          it.printf(0, 104, id(font_sm), "PM 2.5");
+          it.printf(w, 104, id(font_sm), TextAlign::TOP_RIGHT, "%.0f", id(pm25).state);
+          it.printf(0, 116, id(font_sm), "PM 10");
+          it.printf(w, 116, id(font_sm), TextAlign::TOP_RIGHT, "%.0f", id(pm100).state);
+
+      - id: page_env
+        lambda: |-
+          int w = 128;
+          it.printf(0, 2, id(font_mid), "Environment");
+          it.line(0, 16, w, 16);
+
+          it.printf(0, 20, id(font_sm), "Temp");
+          it.printf(w, 20, id(font_sm), TextAlign::TOP_RIGHT, "%.1f C", id(temp_bme).state);
+          it.printf(0, 32, id(font_sm), "Humidity");
+          it.printf(w, 32, id(font_sm), TextAlign::TOP_RIGHT, "%.1f%%", id(hum_bme).state);
+          it.printf(0, 44, id(font_sm), "Pressure");
+          it.printf(w, 44, id(font_sm), TextAlign::TOP_RIGHT, "%.0f hPa", id(pressure_sensor).state);
+          it.printf(0, 56, id(font_sm), "Dew Point");
+          it.printf(w, 56, id(font_sm), TextAlign::TOP_RIGHT, "%.1f C", id(dew_point).state);
+          it.printf(0, 68, id(font_sm), "Abs Humidity");
+          it.printf(w, 68, id(font_sm), TextAlign::TOP_RIGHT, "%.1f g/m3", id(abs_hum).state);
+          it.printf(0, 80, id(font_sm), "Light");
+          it.printf(w, 80, id(font_sm), TextAlign::TOP_RIGHT, "%.0f lx", id(light_sensor).state);
+          it.printf(0, 92, id(font_sm), "IR");
+          it.printf(w, 92, id(font_sm), TextAlign::TOP_RIGHT, "%.0f lx", id(ir_light).state);
+          it.printf(0, 104, id(font_sm), "BSEC");
+          it.printf(w, 104, id(font_sm), TextAlign::TOP_RIGHT, "%s", id(iaq_accuracy_text).state.c_str());
+
+
+interval:
+  - interval: 8s
+    then:
+      - lambda: |-
+          bool ready = !isnan(id(co2_sensor).state) && id(co2_sensor).state > 0
+                    && !isnan(id(pm25).state)
+                    && !isnan(id(temp_bme).state);
+
+          if (!id(booted)) {
+            if (id(boot_fails) >= 3) {
+              id(oled_display).show_page(id(page_splash));
+              id(oled_display).update();
+              return;
+            }
+
+            static int boot_ticks = 0;
+            boot_ticks++;
+
+            bool co2_has = !isnan(id(co2_sensor).state) && id(co2_sensor).state > 0;
+            bool pm_has = !isnan(id(pm25).state);
+            bool bme_has = !isnan(id(temp_bme).state);
+            bool all_connected = co2_has && pm_has && bme_has;
+
+            float co2v = id(co2_sensor).state;
+            float tmpv = id(temp_bme).state;
+            float humv = id(hum_bme).state;
+            float pmv = id(pm25).state;
+            float prsv = id(pressure_sensor).state;
+            bool co2_sane = co2_has && co2v >= 300 && co2v <= 5000;
+            bool pm_sane = pm_has && pmv >= 0 && pmv <= 1000;
+            bool bme_sane = bme_has && tmpv >= -40 && tmpv <= 85 && humv >= 0 && humv <= 100 && prsv >= 800 && prsv <= 1200;
+            bool all_sane = co2_sane && pm_sane && bme_sane;
+
+            if (id(boot_phase) == 0 && boot_ticks >= 1) id(boot_phase) = 1;
+            if (id(boot_phase) == 1 && all_connected) id(boot_phase) = 2;
+            if (id(boot_phase) == 2 && all_sane) id(boot_phase) = 3;
+
+            if (id(boot_phase) == 3) {
+              id(booted) = true;
+              id(boot_fails) = 0;
+              id(buzzer).play("boot:d=16,o=7,b=400:g,b");
+              id(oled_display).show_page(id(page_face));
+              id(oled_display).update();
+              return;
+            }
+
+            if (boot_ticks > 11) {
+              id(boot_fails) += 1;
+              id(buzzer).play("err:d=8,o=4,b=120:c,p,c,p,c");
+              delay(2000);
+              App.safe_reboot();
+            }
+
+            id(oled_display).show_page(id(page_splash));
+            id(oled_display).update();
+            return;
+          }
+
+          static int tick = 0;
+          tick = (tick + 1) % 4;
+          if (tick == 2)
+            id(oled_display).show_page(id(page_air));
+          else if (tick == 3)
+            id(oled_display).show_page(id(page_env));
+          else
+            id(oled_display).show_page(id(page_face));
+      - component.update: oled_display
+  - interval: 60s
+    then:
+      - lambda: |-
+          if (!id(buzzer_alert).state) return;
+          static uint32_t boot_time = millis();
+          if (millis() - boot_time < 90000) return;
+          if (isnan(id(co2_sensor).state) || isnan(id(pm25).state)) return;
+
+          static bool co2_1k = false, co2_1k5 = false;
+          static bool pm_35 = false, pm_55 = false;
+          static bool iaq_150 = false, iaq_250 = false;
+
+          float co2 = id(co2_sensor).state;
+          if (co2 > 1000) co2_1k = true; else if (co2 < 900) co2_1k = false;
+          if (co2 > 1500) co2_1k5 = true; else if (co2 < 1350) co2_1k5 = false;
+
+          float pm = id(pm25).state;
+          if (pm > 35) pm_35 = true; else if (pm < 30) pm_35 = false;
+          if (pm > 55) pm_55 = true; else if (pm < 48) pm_55 = false;
+
+          float iq = id(iaq).state;
+          bool iq_valid = !isnan(iq);
+          if (iq_valid && iq > 150) iaq_150 = true; else if (!iq_valid || iq < 130) iaq_150 = false;
+          if (iq_valid && iq > 250) iaq_250 = true; else if (!iq_valid || iq < 220) iaq_250 = false;
+
+          int score = co2_1k + co2_1k5 + pm_35 + pm_55 + iaq_150 + iaq_250;
           static int last_score = -1;
           if (score == last_score) return;
           last_score = score;
@@ -327,11 +542,11 @@ text_sensor:
       if (id(pm25).state < 12) {
         return {"Good"};
       } else if (id(pm25).state < 35) {
-        return {"Moderate"};
+        return {"Fair"};
       } else if (id(pm25).state < 55) {
-        return {"Unhealthy Sensitive"};
+        return {"Poor"};
       } else {
-        return {"Unhealthy"};
+        return {"Bad"};
       }
     update_interval: 30s
 
@@ -385,6 +600,7 @@ text_sensor:
     bme690_id: bme690_hub
     iaq_accuracy:
       name: "IAQ Accuracy"
+      id: iaq_accuracy_text
 
 binary_sensor:
   # Ventilation needed (CO2 or IAQ based)
@@ -417,8 +633,13 @@ switch:
     name: "Buzzer Alert"
     id: buzzer_alert
     optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
     turn_on_action:
-      - rtttl.play: "on:d=16,o=6,b=180:c,g"
+      - if:
+          condition:
+            lambda: 'return millis() > 30000;'
+          then:
+            - rtttl.play: "on:d=16,o=6,b=180:c,g"
     turn_off_action:
       - if:
           condition:
