@@ -133,22 +133,28 @@ display:
           it.printf(w / 2, 18, id(font_mid), TextAlign::TOP_CENTER, "Monitor");
 
           int phase = id(boot_phase);
-          const char *phases[] = {"Waiting", "Testing", "Validating", "Ready"};
-          it.printf(w / 2, 36, id(font_sm), TextAlign::TOP_CENTER, "%s", phases[phase < 4 ? phase : 3]);
+          bool co2_up = !isnan(id(co2_sensor).state) && id(co2_sensor).state > 0;
+          bool pm_up = !isnan(id(pm25).state);
+          bool bme_up = !isnan(id(temp_bme).state);
+          int sensors_up = co2_up + pm_up + bme_up;
+
+          if (phase < 1) {
+            it.printf(w / 2, 36, id(font_sm), TextAlign::TOP_CENTER, "Initializing sensors");
+          } else if (sensors_up == 0) {
+            it.printf(w / 2, 36, id(font_sm), TextAlign::TOP_CENTER, "Probing sensors");
+          } else if (sensors_up < 3) {
+            it.printf(w / 2, 36, id(font_sm), TextAlign::TOP_CENTER, "%d/3 sensors ready", sensors_up);
+          } else if (phase == 2) {
+            it.printf(w / 2, 36, id(font_sm), TextAlign::TOP_CENTER, "Validating readings");
+          } else {
+            it.printf(w / 2, 36, id(font_sm), TextAlign::TOP_CENTER, "All systems go");
+          }
 
           it.line(0, 48, w, 48);
 
           bool co2_has = !isnan(id(co2_sensor).state) && id(co2_sensor).state > 0;
           bool pm_has = !isnan(id(pm25).state);
           bool bme_has = !isnan(id(temp_bme).state);
-
-          auto status = [&](bool has, bool sane, int ph) -> const char* {
-            if (ph < 1) return "Waiting";
-            if (!has) return "Testing";
-            if (ph < 2) return "Connected";
-            if (!sane) return "Bad Value";
-            return "Ready";
-          };
 
           float co2v = id(co2_sensor).state;
           float tmpv = id(temp_bme).state;
@@ -160,27 +166,52 @@ display:
           bool pm_sane = pm_has && pmv >= 0 && pmv <= 1000;
           bool bme_sane = bme_has && tmpv >= -40 && tmpv <= 85 && humv >= 0 && humv <= 100 && prsv >= 800 && prsv <= 1200;
 
-          it.printf(0, 54, id(font_sm), "SenseAir S88");
-          it.printf(w, 54, id(font_sm), TextAlign::TOP_RIGHT, "%s", status(co2_has, co2_sane, phase));
-          it.printf(0, 68, id(font_sm), "PMS5003");
-          it.printf(w, 68, id(font_sm), TextAlign::TOP_RIGHT, "%s", status(pm_has, pm_sane, phase));
-          it.printf(0, 82, id(font_sm), "BME690");
-          it.printf(w, 82, id(font_sm), TextAlign::TOP_RIGHT, "%s", status(bme_has, bme_sane, phase));
+          // SenseAir S88
+          it.printf(0, 52, id(font_sm), "SenseAir S88");
+          if (phase < 1) {
+            it.printf(w, 52, id(font_sm), TextAlign::TOP_RIGHT, "Waiting");
+          } else if (!co2_has) {
+            it.printf(w, 52, id(font_sm), TextAlign::TOP_RIGHT, "Probing");
+          } else if (!co2_sane) {
+            it.printf(w, 52, id(font_sm), TextAlign::TOP_RIGHT, "Bad: %.0f", co2v);
+          } else {
+            it.printf(w, 52, id(font_sm), TextAlign::TOP_RIGHT, "%.0f ppm", co2v);
+          }
 
-          int ready = co2_sane + pm_sane + bme_sane;
+          // PMS5003
+          it.printf(0, 66, id(font_sm), "PMS5003");
+          if (phase < 1) {
+            it.printf(w, 66, id(font_sm), TextAlign::TOP_RIGHT, "Waiting");
+          } else if (!pm_has) {
+            it.printf(w, 66, id(font_sm), TextAlign::TOP_RIGHT, "Probing");
+          } else if (!pm_sane) {
+            it.printf(w, 66, id(font_sm), TextAlign::TOP_RIGHT, "Bad: %.0f", pmv);
+          } else {
+            it.printf(w, 66, id(font_sm), TextAlign::TOP_RIGHT, "PM2.5: %.0f", pmv);
+          }
+
+          // BME690
+          it.printf(0, 80, id(font_sm), "BME690");
+          if (phase < 1) {
+            it.printf(w, 80, id(font_sm), TextAlign::TOP_RIGHT, "Waiting");
+          } else if (!bme_has) {
+            it.printf(w, 80, id(font_sm), TextAlign::TOP_RIGHT, "Warming");
+          } else if (!bme_sane) {
+            it.printf(w, 80, id(font_sm), TextAlign::TOP_RIGHT, "Bad: %.0f/%.0f", tmpv, prsv);
+          } else {
+            it.printf(w, 80, id(font_sm), TextAlign::TOP_RIGHT, "%.1fC %.0f%%", tmpv, humv);
+          }
+
+          // Loading bar: 6 steps (connected + sane for each sensor)
+          int steps = co2_has + pm_has + bme_has + co2_sane + pm_sane + bme_sane;
           int bar_w = 120;
-          int fill = 0;
-          if (phase == 0) fill = 0;
-          else if (phase == 1) fill = (co2_has + pm_has + bme_has) * bar_w / 6;
-          else if (phase == 2) fill = bar_w / 2 + ready * bar_w / 6;
-          else fill = bar_w;
-          it.rectangle(4, 100, bar_w, 8);
-          if (fill > 0) it.filled_rectangle(4, 100, fill, 8);
+          int fill = steps * bar_w / 6;
+          it.rectangle(4, 98, bar_w, 8);
+          if (fill > 0) it.filled_rectangle(4, 98, fill, 8);
 
-          if (phase >= 2) {
-            it.printf(0, 114, id(font_sm), "CO2:%.0f", co2v);
-            it.printf(w / 2, 114, id(font_sm), TextAlign::TOP_CENTER, "T:%.0f", tmpv);
-            it.printf(w, 114, id(font_sm), TextAlign::TOP_RIGHT, "PM:%.0f", pmv);
+          // Bottom status
+          if (phase >= 2 && prsv > 0) {
+            it.printf(w / 2, 112, id(font_sm), TextAlign::TOP_CENTER, "%.0f hPa  %.0f lx", prsv, id(light_sensor).state);
           }
 
       - id: page_face
@@ -254,10 +285,10 @@ display:
             it.printf(0, 106, id(font_mid), "%.0f", id(iaq).state);
           }
           it.printf(w, 92, id(font_mid), TextAlign::TOP_RIGHT, "PM2.5");
-          it.printf(w, 106, id(font_mid), TextAlign::TOP_RIGHT, "%.0f", id(pm25).state);
+          it.printf(w, 106, id(font_mid), TextAlign::TOP_RIGHT, "%.0f ug", id(pm25).state);
 
-          it.printf(w / 2, 92, id(font_mid), TextAlign::TOP_CENTER, "Temp");
-          it.printf(w / 2, 106, id(font_mid), TextAlign::TOP_CENTER, "%.1f C", id(temp_bme).state);
+          it.printf(w / 2 - 10, 92, id(font_mid), TextAlign::TOP_CENTER, "Temp");
+          it.printf(w / 2 - 10, 106, id(font_mid), TextAlign::TOP_CENTER, "%.1f C", id(temp_bme).state);
 
       - id: page_air
         lambda: |-
@@ -267,26 +298,24 @@ display:
 
           it.printf(0, 20, id(font_sm), "CO2");
           it.printf(w, 20, id(font_sm), TextAlign::TOP_RIGHT, "%.0f ppm", id(co2_sensor).state);
-          it.printf(0, 32, id(font_sm), "eCO2");
-          it.printf(w, 32, id(font_sm), TextAlign::TOP_RIGHT, "%.0f ppm", id(co2_eq).state);
-          it.printf(0, 44, id(font_sm), "IAQ");
+          it.printf(0, 34, id(font_sm), "eCO2");
+          it.printf(w, 34, id(font_sm), TextAlign::TOP_RIGHT, "%.0f ppm", id(co2_eq).state);
+          it.printf(0, 48, id(font_sm), "IAQ");
           if (isnan(id(iaq).state)) {
-            it.printf(w, 44, id(font_sm), TextAlign::TOP_RIGHT, "--");
+            it.printf(w, 48, id(font_sm), TextAlign::TOP_RIGHT, "--");
           } else {
-            it.printf(w, 44, id(font_sm), TextAlign::TOP_RIGHT, "%.0f", id(iaq).state);
+            it.printf(w, 48, id(font_sm), TextAlign::TOP_RIGHT, "%.0f", id(iaq).state);
           }
-          it.printf(0, 56, id(font_sm), "Static IAQ");
-          it.printf(w, 56, id(font_sm), TextAlign::TOP_RIGHT, "%.0f", id(static_iaq).state);
-          it.printf(0, 68, id(font_sm), "Gas Res");
-          it.printf(w, 68, id(font_sm), TextAlign::TOP_RIGHT, "%.0f", id(gas_res).state);
-          it.printf(0, 80, id(font_sm), "Gas Pct");
-          it.printf(w, 80, id(font_sm), TextAlign::TOP_RIGHT, "%.1f%%", id(gas_pct).state);
-          it.printf(0, 92, id(font_sm), "PM 1.0");
-          it.printf(w, 92, id(font_sm), TextAlign::TOP_RIGHT, "%.0f", id(pm10_raw).state);
+          it.printf(0, 62, id(font_sm), "Static IAQ");
+          it.printf(w, 62, id(font_sm), TextAlign::TOP_RIGHT, "%.0f", id(static_iaq).state);
+          it.printf(0, 76, id(font_sm), "Gas Res");
+          it.printf(w, 76, id(font_sm), TextAlign::TOP_RIGHT, "%.0f ohm", id(gas_res).state);
+          it.printf(0, 90, id(font_sm), "PM 1.0");
+          it.printf(w, 90, id(font_sm), TextAlign::TOP_RIGHT, "%.0f ug/m3", id(pm10_raw).state);
           it.printf(0, 104, id(font_sm), "PM 2.5");
-          it.printf(w, 104, id(font_sm), TextAlign::TOP_RIGHT, "%.0f", id(pm25).state);
-          it.printf(0, 116, id(font_sm), "PM 10");
-          it.printf(w, 116, id(font_sm), TextAlign::TOP_RIGHT, "%.0f", id(pm100).state);
+          it.printf(w, 104, id(font_sm), TextAlign::TOP_RIGHT, "%.0f ug/m3", id(pm25).state);
+          it.printf(0, 118, id(font_sm), "PM 10");
+          it.printf(w, 118, id(font_sm), TextAlign::TOP_RIGHT, "%.0f ug/m3", id(pm100).state);
 
       - id: page_env
         lambda: |-
