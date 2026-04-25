@@ -3,7 +3,7 @@ esphome:
   friendly_name: Air-Quality-Monitor-2
   project:
     name: sheltoncyril.air-quality-monitor
-    version: "1.0.0"
+    version: "1.1.0"
   on_boot:
     priority: -100
     then:
@@ -156,6 +156,7 @@ display:
             if (!id(hw_error)) {
               id(hw_error) = true;
               id(boot_fails) = 0;
+              id(buzzer).play("hwfail:d=4,o=3,b=80:c,p,c,p,c");
             }
             // Inverted header bar
             it.filled_rectangle(0, 0, w, 16);
