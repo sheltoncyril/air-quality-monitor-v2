@@ -91,6 +91,22 @@ globals:
     type: int
     restore_value: false
     initial_value: '0'
+  - id: hw_error
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  - id: fail_co2
+    type: bool
+    restore_value: true
+    initial_value: 'false'
+  - id: fail_pm
+    type: bool
+    restore_value: true
+    initial_value: 'false'
+  - id: fail_bme
+    type: bool
+    restore_value: true
+    initial_value: 'false'
 
 # Fonts for OLED — pixel fonts for 8-bit look
 font:
@@ -113,24 +129,31 @@ display:
     id: oled_display
     update_interval: 3s
     pages:
+      - id: page_reboot
+        lambda: |-
+          int w = 128;
+          it.printf(w / 2, 40, id(font_mid), TextAlign::TOP_CENTER, "Sensor Fail");
+          it.printf(w / 2, 60, id(font_sm), TextAlign::TOP_CENTER, "Attempt %d/3", (int)id(boot_fails));
+          it.printf(w / 2, 80, id(font_sm), TextAlign::TOP_CENTER, "Rebooting");
+
       - id: page_splash
         lambda: |-
           int w = 128;
 
-          if (id(boot_fails) >= 3) {
-            id(boot_fails) = 0;
+          if (id(boot_fails) >= 3 || id(hw_error)) {
+            if (!id(hw_error)) {
+              id(hw_error) = true;
+              id(boot_fails) = 0;
+            }
             it.printf(w / 2, 10, id(font_mid), TextAlign::TOP_CENTER, "Hardware");
             it.printf(w / 2, 26, id(font_mid), TextAlign::TOP_CENTER, "Error");
             it.line(0, 42, w, 42);
-            bool co2_ok = !isnan(id(co2_sensor).state) && id(co2_sensor).state > 0;
-            bool pm_ok = !isnan(id(pm25).state);
-            bool bme_ok = !isnan(id(temp_bme).state);
             it.printf(0, 48, id(font_sm), "SenseAir S88");
-            it.printf(w, 48, id(font_sm), TextAlign::TOP_RIGHT, co2_ok ? "OK" : "FAIL");
+            it.printf(w, 48, id(font_sm), TextAlign::TOP_RIGHT, id(fail_co2) ? "FAIL" : "OK");
             it.printf(0, 60, id(font_sm), "PMS5003");
-            it.printf(w, 60, id(font_sm), TextAlign::TOP_RIGHT, pm_ok ? "OK" : "FAIL");
+            it.printf(w, 60, id(font_sm), TextAlign::TOP_RIGHT, id(fail_pm) ? "FAIL" : "OK");
             it.printf(0, 72, id(font_sm), "BME690");
-            it.printf(w, 72, id(font_sm), TextAlign::TOP_RIGHT, bme_ok ? "OK" : "FAIL");
+            it.printf(w, 72, id(font_sm), TextAlign::TOP_RIGHT, id(fail_bme) ? "FAIL" : "OK");
             it.printf(w / 2, 92, id(font_sm), TextAlign::TOP_CENTER, "3 boot attempts failed");
             it.printf(w / 2, 108, id(font_sm), TextAlign::TOP_CENTER, "Check wiring, reboot");
             return;
@@ -202,7 +225,7 @@ display:
           if (phase < 1) {
             it.printf(w, 80, id(font_sm), TextAlign::TOP_RIGHT, "Waiting");
           } else if (!bme_has) {
-            it.printf(w, 80, id(font_sm), TextAlign::TOP_RIGHT, "Warming");
+            it.printf(w, 80, id(font_sm), TextAlign::TOP_RIGHT, "Probing");
           } else if (!bme_sane) {
             it.printf(w, 80, id(font_sm), TextAlign::TOP_RIGHT, "Bad: %.0f/%.0f", tmpv, prsv);
           } else {
@@ -358,7 +381,7 @@ interval:
                     && !isnan(id(temp_bme).state);
 
           if (!id(booted)) {
-            if (id(boot_fails) >= 3) {
+            if (id(boot_fails) >= 3 || id(hw_error)) {
               id(oled_display).show_page(id(page_splash));
               id(oled_display).update();
               return;
@@ -389,6 +412,9 @@ interval:
             if (id(boot_phase) == 3) {
               id(booted) = true;
               id(boot_fails) = 0;
+              id(fail_co2) = false;
+              id(fail_pm) = false;
+              id(fail_bme) = false;
               id(buzzer).play("boot:d=16,o=7,b=400:g,b");
               id(oled_display).show_page(id(page_face));
               id(oled_display).update();
@@ -397,8 +423,13 @@ interval:
 
             if (boot_ticks > 11) {
               id(boot_fails) += 1;
+              id(fail_co2) = !co2_has;
+              id(fail_pm) = !pm_has;
+              id(fail_bme) = !bme_has;
+              id(oled_display).show_page(id(page_reboot));
+              id(oled_display).update();
               id(buzzer).play("err:d=8,o=4,b=120:c,p,c,p,c");
-              delay(2000);
+              delay(3000);
               App.safe_reboot();
             }
 
