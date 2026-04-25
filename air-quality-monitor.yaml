@@ -1,0 +1,426 @@
+esphome:
+  name: air-quality-monitor-2
+  friendly_name: Air-Quality-Monitor-2
+  on_boot:
+    priority: -100
+    then:
+      - delay: 5s
+      - rtttl.play: "boot:d=32,o=6,b=300:g,b,d7"
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+
+logger:
+  hardware_uart: USB_CDC
+
+api:
+  encryption:
+    key: !secret api_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "Air-Quality-Monitor-2"
+    password: !secret ap_password
+
+captive_portal:
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/sheltoncyril/esphome
+      ref: dev
+    components: [bme690]
+
+# I2C bus — BME680, VEML7700, OLED all share this
+i2c:
+  sda: GPIO5
+  scl: GPIO6
+  scan: false
+  frequency: 400kHz
+
+bme690:
+  id: bme690_hub
+  bsec_library: !secret bsec_library_path
+  address: 0x77
+  sample_rate: LP
+  update_interval: 3s
+  state_save_interval: 6h
+
+# UARTs — logger on USB CDC frees both hardware UARTs
+uart:
+  - id: uart_senseair
+    rx_pin: GPIO8
+    tx_pin: GPIO7
+    baud_rate: 9600
+  - id: uart_pms
+    rx_pin: GPIO21
+    tx_pin: GPIO20
+    baud_rate: 9600
+
+# Buzzer PWM output
+output:
+  - platform: ledc
+    pin: GPIO10
+    id: buzzer_output
+
+rtttl:
+  output: buzzer_output
+  id: buzzer
+
+# Fonts for OLED — pixel fonts for 8-bit look
+font:
+  - file: "gfonts://Silkscreen"
+    id: font_big
+    size: 20
+  - file: "gfonts://Silkscreen"
+    id: font_mid
+    size: 12
+  - file: "gfonts://Silkscreen"
+    id: font_sm
+    size: 8
+
+# 1.5" I2C OLED 128x128
+display:
+  - platform: ssd1306_i2c
+    model: "SH1107 128x128"
+    address: 0x3C
+    rotation: 180°
+    id: oled_display
+    update_interval: 3s
+    lambda: |-
+      int w = 128;
+      // Air quality score for face expression
+      int score = 0;
+      if (id(co2_sensor).state > 1000) score++;
+      if (id(co2_sensor).state > 1500) score++;
+      if (id(iaq).state > 150) score++;
+      if (id(pm25).state > 35) score++;
+
+      // === PIXEL ART FACE (22x22 at top-left) ===
+      it.rectangle(0, 0, 22, 22);
+      if (score >= 4) {
+        // X_X dead eyes
+        it.line(5, 5, 9, 9); it.line(5, 9, 9, 5);
+        it.line(12, 5, 16, 9); it.line(12, 9, 16, 5);
+        // O mouth
+        it.rectangle(7, 14, 8, 6);
+      } else if (score >= 3) {
+        // Worried eyes
+        it.filled_rectangle(5, 6, 4, 4);
+        it.filled_rectangle(13, 6, 4, 4);
+        // Frown
+        it.filled_rectangle(6, 17, 10, 2);
+        it.filled_rectangle(5, 15, 2, 2);
+        it.filled_rectangle(15, 15, 2, 2);
+      } else if (score >= 2) {
+        // Normal eyes
+        it.filled_rectangle(5, 6, 4, 4);
+        it.filled_rectangle(13, 6, 4, 4);
+        // Flat mouth
+        it.filled_rectangle(6, 15, 10, 2);
+      } else if (score >= 1) {
+        // Happy eyes
+        it.filled_rectangle(5, 6, 4, 4);
+        it.filled_rectangle(13, 6, 4, 4);
+        // Small smile
+        it.filled_rectangle(6, 14, 10, 2);
+        it.filled_rectangle(5, 16, 2, 2);
+        it.filled_rectangle(15, 16, 2, 2);
+      } else {
+        // Ecstatic eyes (^_^)
+        it.filled_rectangle(4, 8, 6, 2);
+        it.filled_rectangle(4, 6, 2, 2);
+        it.filled_rectangle(8, 6, 2, 2);
+        it.filled_rectangle(12, 8, 6, 2);
+        it.filled_rectangle(12, 6, 2, 2);
+        it.filled_rectangle(16, 6, 2, 2);
+        // Big grin
+        it.filled_rectangle(5, 14, 12, 2);
+        it.filled_rectangle(4, 16, 2, 2);
+        it.filled_rectangle(16, 16, 2, 2);
+      }
+
+      // === CO2 hero (right of face) ===
+      it.printf(26, 0, id(font_mid), "CO2");
+      it.printf(w, 0, id(font_big), TextAlign::TOP_RIGHT, "%.0f", id(co2_sensor).state);
+
+      // === Separator ===
+      it.line(0, 24, w, 24);
+
+      // === Key metrics (font_mid, well spaced) ===
+      if (isnan(id(iaq).state)) {
+        it.printf(0, 28, id(font_mid), "IAQ  --");
+      } else {
+        it.printf(0, 28, id(font_mid), "IAQ  %.0f", id(iaq).state);
+      }
+
+      it.printf(0, 44, id(font_mid), "PM2.5  %.0f", id(pm25).state);
+
+      it.printf(0, 60, id(font_mid), "%.1fC  %.0f%%", id(temp_bme).state, id(hum_bme).state);
+
+      it.printf(0, 76, id(font_mid), "%.0f hPa", id(pressure_sensor).state);
+      it.printf(w, 76, id(font_mid), TextAlign::TOP_RIGHT, "%.0f lx", id(light_sensor).state);
+
+      // === Separator ===
+      it.line(0, 92, w, 92);
+
+      // === Status (centered, prominent) ===
+      it.printf(w / 2, 96, id(font_big), TextAlign::TOP_CENTER, "%s", id(air_quality).state.c_str());
+      it.printf(w / 2, 116, id(font_sm), TextAlign::TOP_CENTER, "CO2:%s  PM:%s", id(co2_status).state.c_str(), id(pm25_status).state.c_str());
+
+interval:
+  - interval: 60s
+    then:
+      - lambda: |-
+          static uint32_t boot_time = millis();
+          if (millis() - boot_time < 90000) return;
+          if (isnan(id(co2_sensor).state) || isnan(id(pm25).state)) return;
+          int score = 0;
+          if (id(co2_sensor).state > 1000) score++;
+          if (id(co2_sensor).state > 1500) score++;
+          if (id(pm25).state > 35) score++;
+          if (id(pm25).state > 55) score++;
+          if (!isnan(id(iaq).state) && id(iaq).state > 150) score++;
+          if (!isnan(id(iaq).state) && id(iaq).state > 250) score++;
+          static int last_score = -1;
+          if (score == last_score) return;
+          last_score = score;
+          if (score == 0) {
+            id(buzzer).play("good:d=16,o=6,b=180:c,e,g");
+          } else if (score == 1) {
+            id(buzzer).play("ok:d=16,o=6,b=180:e,g");
+          } else if (score == 2) {
+            id(buzzer).play("fair:d=16,o=5,b=160:a,a");
+          } else if (score == 3) {
+            id(buzzer).play("poor:d=16,o=5,b=160:e,d,c");
+          } else if (score == 4) {
+            id(buzzer).play("bad:d=16,o=5,b=140:e,d#,c");
+          } else {
+            id(buzzer).play("vbad:d=8,o=4,b=120:c,p,c");
+          }
+
+
+sensor:
+  # SenseAir S88 — CO2
+  - platform: senseair
+    id: senseair_id
+    uart_id: uart_senseair
+    co2:
+      id: co2_sensor
+      name: "CO2"
+    update_interval: 15s
+
+  # PMS5003 — Particulate Matter
+  - platform: pmsx003
+    type: PMSX003
+    uart_id: uart_pms
+    pm_1_0:
+      name: "PM 1.0"
+      id: pm10_raw
+    pm_2_5:
+      name: "PM 2.5"
+      id: pm25
+    pm_10_0:
+      name: "PM 10"
+      id: pm100
+    update_interval: 30s
+
+  # BME690 — Temp, Humidity, Pressure, Gas, IAQ (via BSEC3)
+  - platform: bme690
+    bme690_id: bme690_hub
+    temperature:
+      name: "Temperature"
+      id: temp_bme
+    humidity:
+      name: "Humidity"
+      id: hum_bme
+    pressure:
+      name: "Pressure"
+      id: pressure_sensor
+    gas_resistance:
+      name: "Gas Resistance"
+      id: gas_res
+    iaq:
+      name: "IAQ"
+      id: iaq
+    static_iaq:
+      name: "Static IAQ"
+      id: static_iaq
+    co2_equivalent:
+      name: "CO2 Equivalent"
+      id: co2_eq
+    breath_voc_equivalent:
+      name: "Breath VOC Equivalent"
+      id: voc_eq
+    gas_percentage:
+      name: "Gas Percentage"
+      id: gas_pct
+
+  # VEML7700 — Ambient Light
+  - platform: veml7700
+    address: 0x10
+    auto_mode: true
+    integration_time: 800ms
+    gain: 2X
+    ambient_light:
+      name: "Ambient Light"
+      id: light_sensor
+    full_spectrum:
+      name: "Full Spectrum Light"
+    infrared:
+      name: "Infrared Light"
+      id: ir_light
+    ambient_light_counts:
+      name: "Ambient Light Counts"
+    full_spectrum_counts:
+      name: "Full Spectrum Counts"
+    update_interval: 30s
+
+  # Absolute Humidity (calculated)
+  - platform: absolute_humidity
+    name: "Absolute Humidity"
+    id: abs_hum
+    temperature: temp_bme
+    humidity: hum_bme
+
+  # Dew Point (calculated)
+  - platform: template
+    name: "Dew Point"
+    id: dew_point
+    lambda: |-
+      return (243.5*(log(id(hum_bme).state/100)+((17.67*id(temp_bme).state)/
+      (243.5+id(temp_bme).state)))/(17.67-log(id(hum_bme).state/100)-
+      ((17.67*id(temp_bme).state)/(243.5+id(temp_bme).state))));
+    unit_of_measurement: °C
+    icon: mdi:thermometer-alert
+    update_interval: 60s
+
+text_sensor:
+  # CO2 Status
+  - platform: template
+    name: "CO2 Status"
+    id: co2_status
+    icon: mdi:molecule-co2
+    lambda: |-
+      if (id(co2_sensor).state < 800) {
+        return {"Good"};
+      } else if (id(co2_sensor).state < 1000) {
+        return {"Fair"};
+      } else if (id(co2_sensor).state < 1500) {
+        return {"Poor"};
+      } else {
+        return {"Bad"};
+      }
+    update_interval: 15s
+
+  # PM2.5 Status
+  - platform: template
+    name: "PM2.5 Status"
+    id: pm25_status
+    icon: mdi:air-filter
+    lambda: |-
+      if (id(pm25).state < 12) {
+        return {"Good"};
+      } else if (id(pm25).state < 35) {
+        return {"Moderate"};
+      } else if (id(pm25).state < 55) {
+        return {"Unhealthy Sensitive"};
+      } else {
+        return {"Unhealthy"};
+      }
+    update_interval: 30s
+
+  # Overall Air Quality (CO2 + PM2.5 + IAQ based)
+  - platform: template
+    name: "Air Quality"
+    id: air_quality
+    icon: mdi:air-purifier
+    lambda: |-
+      int score = 0;
+      if (id(co2_sensor).state > 1000) score++;
+      if (id(co2_sensor).state > 1500) score++;
+      if (id(pm25).state > 35) score++;
+      if (id(iaq).state > 150) score++;
+      if (id(iaq).state > 250) score++;
+      if (score == 0) return {"Excellent"};
+      else if (score == 1) return {"Good"};
+      else if (score == 2) return {"Fair"};
+      else if (score == 3) return {"Poor"};
+      else return {"Bad"};
+    update_interval: 15s
+
+  # BME690 IAQ Classification
+  - platform: template
+    name: "BME690 IAQ Classification"
+    lambda: |-
+      if (int(id(iaq).state) <= 50) {
+        return {"Excellent"};
+      } else if (int(id(iaq).state) >= 51 && int(id(iaq).state) <= 100) {
+        return {"Good"};
+      } else if (int(id(iaq).state) >= 101 && int(id(iaq).state) <= 150) {
+        return {"Lightly polluted"};
+      } else if (int(id(iaq).state) >= 151 && int(id(iaq).state) <= 200) {
+        return {"Moderately polluted"};
+      } else if (int(id(iaq).state) >= 201 && int(id(iaq).state) <= 250) {
+        return {"Heavily polluted"};
+      } else if (int(id(iaq).state) >= 251 && int(id(iaq).state) <= 350) {
+        return {"Severely polluted"};
+      } else if (int(id(iaq).state) >= 351 && int(id(iaq).state) <= 500) {
+        return {"Extremely polluted"};
+      } else {
+        return {"Error"};
+      }
+
+  # BME690 IAQ Accuracy (from bme690 component)
+  - platform: bme690
+    bme690_id: bme690_hub
+    iaq_accuracy:
+      name: "IAQ Accuracy"
+
+binary_sensor:
+  # Ventilation needed (CO2 or IAQ based)
+  - platform: template
+    name: "Ventilation Needed"
+    icon: mdi:window-open-variant
+    lambda: |-
+      return (id(co2_sensor).state > 1200 || id(pm25).state > 35 || id(iaq).state > 200);
+
+button:
+  - platform: template
+    name: "Buzzer Test"
+    on_press:
+      - rtttl.play: "test:d=16,o=6,b=180:e,g,e"
+  - platform: template
+    name: "SenseAir Background Calibrate"
+    on_press:
+      - senseair.background_calibration: senseair_id
+  - platform: template
+    name: "SenseAir ABC Enable"
+    on_press:
+      - senseair.abc_enable: senseair_id
+  - platform: template
+    name: "SenseAir ABC Disable"
+    on_press:
+      - senseair.abc_disable: senseair_id
+
+switch:
+  - platform: template
+    name: "Buzzer Alert"
+    id: buzzer_alert
+    optimistic: true
+    turn_on_action:
+      - rtttl.play: "on:d=16,o=6,b=180:c,g"
+    turn_off_action:
+      - if:
+          condition:
+            lambda: 'return millis() > 30000;'
+          then:
+            - rtttl.play: "off:d=16,o=6,b=180:g,c"
