@@ -1,6 +1,9 @@
 esphome:
   name: air-quality-monitor-2
   friendly_name: Air-Quality-Monitor-2
+  project:
+    name: sheltoncyril.air-quality-monitor
+    version: "1.0.0"
   on_boot:
     priority: -100
     then:
@@ -115,15 +118,19 @@ display:
           int w = 128;
 
           if (id(boot_fails) >= 3) {
+            id(boot_fails) = 0;
             it.printf(w / 2, 10, id(font_mid), TextAlign::TOP_CENTER, "Hardware");
             it.printf(w / 2, 26, id(font_mid), TextAlign::TOP_CENTER, "Error");
             it.line(0, 42, w, 42);
+            bool co2_ok = !isnan(id(co2_sensor).state) && id(co2_sensor).state > 0;
+            bool pm_ok = !isnan(id(pm25).state);
+            bool bme_ok = !isnan(id(temp_bme).state);
             it.printf(0, 48, id(font_sm), "SenseAir S88");
-            it.printf(w, 48, id(font_sm), TextAlign::TOP_RIGHT, "FAIL");
+            it.printf(w, 48, id(font_sm), TextAlign::TOP_RIGHT, co2_ok ? "OK" : "FAIL");
             it.printf(0, 60, id(font_sm), "PMS5003");
-            it.printf(w, 60, id(font_sm), TextAlign::TOP_RIGHT, "FAIL");
+            it.printf(w, 60, id(font_sm), TextAlign::TOP_RIGHT, pm_ok ? "OK" : "FAIL");
             it.printf(0, 72, id(font_sm), "BME690");
-            it.printf(w, 72, id(font_sm), TextAlign::TOP_RIGHT, "FAIL");
+            it.printf(w, 72, id(font_sm), TextAlign::TOP_RIGHT, bme_ok ? "OK" : "FAIL");
             it.printf(w / 2, 92, id(font_sm), TextAlign::TOP_CENTER, "3 boot attempts failed");
             it.printf(w / 2, 108, id(font_sm), TextAlign::TOP_CENTER, "Check wiring, reboot");
             return;
@@ -209,9 +216,10 @@ display:
           it.rectangle(4, 98, bar_w, 8);
           if (fill > 0) it.filled_rectangle(4, 98, fill, 8);
 
-          // Bottom status
+          it.printf(w, 112, id(font_sm), TextAlign::TOP_RIGHT, "v" ESPHOME_PROJECT_VERSION);
+
           if (phase >= 2 && prsv > 0) {
-            it.printf(w / 2, 112, id(font_sm), TextAlign::TOP_CENTER, "%.0f hPa  %.0f lx", prsv, id(light_sensor).state);
+            it.printf(0, 112, id(font_sm), "%.0f hPa  %.0f lx", prsv, id(light_sensor).state);
           }
 
       - id: page_face
@@ -642,25 +650,41 @@ binary_sensor:
 button:
   - platform: template
     name: "Buzzer Test"
+    entity_category: config
     on_press:
       - rtttl.play: "test:d=16,o=6,b=180:e,g,e"
   - platform: template
     name: "SenseAir Background Calibrate"
+    entity_category: config
     on_press:
       - senseair.background_calibration: senseair_id
   - platform: template
     name: "SenseAir ABC Enable"
+    entity_category: config
     on_press:
       - senseair.abc_enable: senseair_id
   - platform: template
     name: "SenseAir ABC Disable"
+    entity_category: config
     on_press:
       - senseair.abc_disable: senseair_id
+  - platform: template
+    name: "SenseAir Factory Calibration"
+    entity_category: config
+    on_press:
+      - if:
+          condition:
+            lambda: 'return millis() > 60000;'
+          then:
+            - uart.write:
+                id: uart_senseair
+                data: [0xFE, 0x06, 0x00, 0x01, 0x7C, 0x02, 0x6D, 0x04]
 
 switch:
   - platform: template
     name: "Buzzer Alert"
     id: buzzer_alert
+    entity_category: config
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
     turn_on_action:
