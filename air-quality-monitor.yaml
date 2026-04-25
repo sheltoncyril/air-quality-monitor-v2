@@ -132,9 +132,21 @@ display:
       - id: page_reboot
         lambda: |-
           int w = 128;
-          it.printf(w / 2, 40, id(font_mid), TextAlign::TOP_CENTER, "Sensor Fail");
-          it.printf(w / 2, 60, id(font_sm), TextAlign::TOP_CENTER, "Attempt %d/3", (int)id(boot_fails));
-          it.printf(w / 2, 80, id(font_sm), TextAlign::TOP_CENTER, "Rebooting");
+          int fx = 44, fy = 2;
+          it.rectangle(fx, fy, 40, 40);
+          it.line(fx+8, fy+10, fx+14, fy+16); it.line(fx+8, fy+16, fx+14, fy+10);
+          it.line(fx+26, fy+10, fx+32, fy+16); it.line(fx+26, fy+16, fx+32, fy+10);
+          it.rectangle(fx+14, fy+26, 12, 8);
+
+          it.printf(w / 2, 46, id(font_mid), TextAlign::TOP_CENTER, "Timeout");
+          it.line(0, 62, w, 62);
+          it.printf(0, 66, id(font_sm), "SenseAir S88");
+          it.printf(w, 66, id(font_sm), TextAlign::TOP_RIGHT, id(fail_co2) ? "FAIL" : "OK");
+          it.printf(0, 78, id(font_sm), "PMS5003");
+          it.printf(w, 78, id(font_sm), TextAlign::TOP_RIGHT, id(fail_pm) ? "FAIL" : "OK");
+          it.printf(0, 90, id(font_sm), "BME690");
+          it.printf(w, 90, id(font_sm), TextAlign::TOP_RIGHT, id(fail_bme) ? "FAIL" : "OK");
+          it.printf(w / 2, 108, id(font_sm), TextAlign::TOP_CENTER, "Rebooting  %d/3", (int)id(boot_fails));
 
       - id: page_splash
         lambda: |-
@@ -145,17 +157,25 @@ display:
               id(hw_error) = true;
               id(boot_fails) = 0;
             }
-            it.printf(w / 2, 10, id(font_mid), TextAlign::TOP_CENTER, "Hardware");
-            it.printf(w / 2, 26, id(font_mid), TextAlign::TOP_CENTER, "Error");
-            it.line(0, 42, w, 42);
-            it.printf(0, 48, id(font_sm), "SenseAir S88");
-            it.printf(w, 48, id(font_sm), TextAlign::TOP_RIGHT, id(fail_co2) ? "FAIL" : "OK");
-            it.printf(0, 60, id(font_sm), "PMS5003");
-            it.printf(w, 60, id(font_sm), TextAlign::TOP_RIGHT, id(fail_pm) ? "FAIL" : "OK");
-            it.printf(0, 72, id(font_sm), "BME690");
-            it.printf(w, 72, id(font_sm), TextAlign::TOP_RIGHT, id(fail_bme) ? "FAIL" : "OK");
-            it.printf(w / 2, 92, id(font_sm), TextAlign::TOP_CENTER, "3 boot attempts failed");
-            it.printf(w / 2, 108, id(font_sm), TextAlign::TOP_CENTER, "Check wiring, reboot");
+            // Inverted header bar
+            it.filled_rectangle(0, 0, w, 16);
+            it.printf(w / 2, 2, id(font_mid), COLOR_OFF, TextAlign::TOP_CENTER, "HARDWARE ERROR");
+
+            // Dead face
+            int fx = 44, fy = 20;
+            it.rectangle(fx, fy, 40, 40);
+            it.line(fx+8, fy+10, fx+14, fy+16); it.line(fx+8, fy+16, fx+14, fy+10);
+            it.line(fx+26, fy+10, fx+32, fy+16); it.line(fx+26, fy+16, fx+32, fy+10);
+            it.rectangle(fx+14, fy+26, 12, 8);
+
+            it.line(0, 64, w, 64);
+            it.printf(0, 68, id(font_sm), "SenseAir S88");
+            it.printf(w, 68, id(font_sm), TextAlign::TOP_RIGHT, id(fail_co2) ? "FAIL" : "OK");
+            it.printf(0, 80, id(font_sm), "PMS5003");
+            it.printf(w, 80, id(font_sm), TextAlign::TOP_RIGHT, id(fail_pm) ? "FAIL" : "OK");
+            it.printf(0, 92, id(font_sm), "BME690");
+            it.printf(w, 92, id(font_sm), TextAlign::TOP_RIGHT, id(fail_bme) ? "FAIL" : "OK");
+            it.printf(w / 2, 112, id(font_sm), TextAlign::TOP_CENTER, "Check wiring, reboot");
             return;
           }
 
@@ -403,11 +423,20 @@ interval:
             bool co2_sane = co2_has && co2v >= 300 && co2v <= 5000;
             bool pm_sane = pm_has && pmv >= 0 && pmv <= 1000;
             bool bme_sane = bme_has && tmpv >= -40 && tmpv <= 85 && humv >= 0 && humv <= 100 && prsv >= 800 && prsv <= 1200;
-            bool all_sane = co2_sane && pm_sane && bme_sane;
+
+            static int co2_ok_count = 0, pm_ok_count = 0, bme_ok_count = 0;
+            co2_ok_count = co2_sane ? co2_ok_count + 1 : 0;
+            pm_ok_count = pm_sane ? pm_ok_count + 1 : 0;
+            bme_ok_count = bme_sane ? bme_ok_count + 1 : 0;
+
+            int co2_need = id(fail_co2) ? 5 : 2;
+            int pm_need = id(fail_pm) ? 5 : 2;
+            int bme_need = id(fail_bme) ? 5 : 2;
+            bool all_stable = co2_ok_count >= co2_need && pm_ok_count >= pm_need && bme_ok_count >= bme_need;
 
             if (id(boot_phase) == 0 && boot_ticks >= 1) id(boot_phase) = 1;
             if (id(boot_phase) == 1 && all_connected) id(boot_phase) = 2;
-            if (id(boot_phase) == 2 && all_sane) id(boot_phase) = 3;
+            if (id(boot_phase) == 2 && all_stable) id(boot_phase) = 3;
 
             if (id(boot_phase) == 3) {
               id(booted) = true;
