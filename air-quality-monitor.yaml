@@ -101,7 +101,7 @@ display:
       int score = 0;
       if (id(co2_sensor).state > 1000) score++;
       if (id(co2_sensor).state > 1500) score++;
-      if (id(iaq).state > 150) score++;
+      if (!isnan(id(iaq).state) && id(iaq).state > 150) score++;
       if (id(pm25).state > 35) score++;
 
       // === PIXEL ART FACE (22x22 at top-left) ===
@@ -257,9 +257,6 @@ sensor:
     co2_equivalent:
       name: "CO2 Equivalent"
       id: co2_eq
-    breath_voc_equivalent:
-      name: "Breath VOC Equivalent"
-      id: voc_eq
     gas_percentage:
       name: "Gas Percentage"
       id: gas_pct
@@ -348,8 +345,8 @@ text_sensor:
       if (id(co2_sensor).state > 1000) score++;
       if (id(co2_sensor).state > 1500) score++;
       if (id(pm25).state > 35) score++;
-      if (id(iaq).state > 150) score++;
-      if (id(iaq).state > 250) score++;
+      if (!isnan(id(iaq).state) && id(iaq).state > 150) score++;
+      if (!isnan(id(iaq).state) && id(iaq).state > 250) score++;
       if (score == 0) return {"Excellent"};
       else if (score == 1) return {"Good"};
       else if (score == 2) return {"Fair"};
@@ -361,19 +358,23 @@ text_sensor:
   - platform: template
     name: "BME690 IAQ Classification"
     lambda: |-
-      if (int(id(iaq).state) <= 50) {
+      if (isnan(id(iaq).state)) {
+        return {"Calibrating"};
+      }
+      int val = (int)id(iaq).state;
+      if (val <= 50) {
         return {"Excellent"};
-      } else if (int(id(iaq).state) >= 51 && int(id(iaq).state) <= 100) {
+      } else if (val <= 100) {
         return {"Good"};
-      } else if (int(id(iaq).state) >= 101 && int(id(iaq).state) <= 150) {
+      } else if (val <= 150) {
         return {"Lightly polluted"};
-      } else if (int(id(iaq).state) >= 151 && int(id(iaq).state) <= 200) {
+      } else if (val <= 200) {
         return {"Moderately polluted"};
-      } else if (int(id(iaq).state) >= 201 && int(id(iaq).state) <= 250) {
+      } else if (val <= 250) {
         return {"Heavily polluted"};
-      } else if (int(id(iaq).state) >= 251 && int(id(iaq).state) <= 350) {
+      } else if (val <= 350) {
         return {"Severely polluted"};
-      } else if (int(id(iaq).state) >= 351 && int(id(iaq).state) <= 500) {
+      } else if (val <= 500) {
         return {"Extremely polluted"};
       } else {
         return {"Error"};
@@ -391,7 +392,7 @@ binary_sensor:
     name: "Ventilation Needed"
     icon: mdi:window-open-variant
     lambda: |-
-      return (id(co2_sensor).state > 1200 || id(pm25).state > 35 || id(iaq).state > 200);
+      return (id(co2_sensor).state > 1200 || id(pm25).state > 35 || (!isnan(id(iaq).state) && id(iaq).state > 200));
 
 button:
   - platform: template
