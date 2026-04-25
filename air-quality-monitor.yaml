@@ -159,7 +159,7 @@ display:
             }
             // Inverted header bar
             it.filled_rectangle(0, 0, w, 16);
-            it.printf(w / 2, 2, id(font_mid), COLOR_OFF, TextAlign::TOP_CENTER, "HARDWARE ERROR");
+            it.print(w / 2, 2, id(font_mid), Color::BLACK, TextAlign::TOP_CENTER, "HARDWARE ERROR");
 
             // Dead face
             int fx = 44, fy = 20;
@@ -194,10 +194,10 @@ display:
             it.printf(w / 2, 36, id(font_sm), TextAlign::TOP_CENTER, "Probing sensors");
           } else if (sensors_up < 3) {
             it.printf(w / 2, 36, id(font_sm), TextAlign::TOP_CENTER, "%d/3 sensors ready", sensors_up);
-          } else if (phase == 2) {
+          } else if (phase < 3) {
             it.printf(w / 2, 36, id(font_sm), TextAlign::TOP_CENTER, "Validating readings");
           } else {
-            it.printf(w / 2, 36, id(font_sm), TextAlign::TOP_CENTER, "All systems go");
+            it.printf(w / 2, 36, id(font_sm), TextAlign::TOP_CENTER, "Ready");
           }
 
           it.line(0, 48, w, 48);
@@ -252,10 +252,12 @@ display:
             it.printf(w, 80, id(font_sm), TextAlign::TOP_RIGHT, "%.1fC %.0f%%", tmpv, humv);
           }
 
-          // Loading bar: 6 steps (connected + sane for each sensor)
-          int steps = co2_has + pm_has + bme_has + co2_sane + pm_sane + bme_sane;
           int bar_w = 120;
-          int fill = steps * bar_w / 6;
+          int fill = 0;
+          if (phase == 0) fill = 0;
+          else if (phase == 1) fill = (co2_has + pm_has + bme_has) * bar_w / 4;
+          else if (phase == 2) fill = bar_w * 3 / 4;
+          else fill = bar_w;
           it.rectangle(4, 98, bar_w, 8);
           if (fill > 0) it.filled_rectangle(4, 98, fill, 8);
 
@@ -270,10 +272,15 @@ display:
           int w = 128;
           int fx = 44, fy = 2;
           int score = 0;
+          if (id(co2_sensor).state > 800) score++;
           if (id(co2_sensor).state > 1000) score++;
           if (id(co2_sensor).state > 1500) score++;
+          if (id(co2_sensor).state > 2500) score++;
+          if (id(co2_sensor).state > 5000) score++;
+          if (id(pm25).state > 12) score++;
           if (id(pm25).state > 35) score++;
           if (id(pm25).state > 55) score++;
+          if (!isnan(id(iaq).state) && id(iaq).state > 100) score++;
           if (!isnan(id(iaq).state) && id(iaq).state > 150) score++;
           if (!isnan(id(iaq).state) && id(iaq).state > 250) score++;
 
@@ -293,10 +300,10 @@ display:
             it.filled_rectangle(fx+14, fy+30, 4, 2);
             it.filled_rectangle(fx+22, fy+30, 4, 2);
           } else if (score >= 3) {
-            // :( worried + sweat drop
+            // :( worried + sweat drop — frown: bar low, corners high
             it.filled_rectangle(fx+10, fy+11, 6, 6);
             it.filled_rectangle(fx+24, fy+11, 6, 6);
-            it.filled_rectangle(fx+12, fy+30, 16, 2);
+            it.filled_rectangle(fx+12, fy+26, 16, 2);
             it.filled_rectangle(fx+10, fy+28, 4, 2);
             it.filled_rectangle(fx+26, fy+28, 4, 2);
             it.filled_rectangle(fx+34, fy+8, 2, 4);
@@ -307,17 +314,17 @@ display:
             it.filled_rectangle(fx+24, fy+11, 6, 6);
             it.filled_rectangle(fx+12, fy+28, 16, 2);
           } else if (score >= 1) {
-            // :) happy
+            // :) happy — smile: bar high, corners low
             it.filled_rectangle(fx+10, fy+11, 6, 6);
             it.filled_rectangle(fx+24, fy+11, 6, 6);
-            it.filled_rectangle(fx+12, fy+26, 16, 2);
+            it.filled_rectangle(fx+12, fy+30, 16, 2);
             it.filled_rectangle(fx+10, fy+28, 4, 2);
             it.filled_rectangle(fx+26, fy+28, 4, 2);
           } else {
-            // ^_^ ecstatic
-            it.line(fx+8, fy+16, fx+13, fy+10); it.line(fx+13, fy+10, fx+18, fy+16);
-            it.line(fx+22, fy+16, fx+27, fy+10); it.line(fx+27, fy+10, fx+32, fy+16);
-            it.filled_rectangle(fx+10, fy+26, 20, 2);
+            // ^_^ ecstatic — eyes: v shapes (render as ^ after 180 rotation)
+            it.line(fx+8, fy+10, fx+13, fy+16); it.line(fx+13, fy+16, fx+18, fy+10);
+            it.line(fx+22, fy+10, fx+27, fy+16); it.line(fx+27, fy+16, fx+32, fy+10);
+            it.filled_rectangle(fx+10, fy+30, 20, 2);
             it.filled_rectangle(fx+8, fy+28, 4, 2);
             it.filled_rectangle(fx+28, fy+28, 4, 2);
           }
@@ -439,6 +446,9 @@ interval:
             if (id(boot_phase) == 2 && all_stable) id(boot_phase) = 3;
 
             if (id(boot_phase) == 3) {
+              id(oled_display).show_page(id(page_splash));
+              id(oled_display).update();
+              delay(1000);
               id(booted) = true;
               id(boot_fails) = 0;
               id(fail_co2) = false;
