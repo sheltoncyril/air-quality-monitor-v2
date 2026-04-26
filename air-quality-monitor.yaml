@@ -111,6 +111,10 @@ globals:
     type: bool
     restore_value: true
     initial_value: 'false'
+  - id: test_level
+    type: int
+    restore_value: false
+    initial_value: '-1'
 
 # Fonts for OLED — pixel fonts for 8-bit look
 font:
@@ -307,6 +311,7 @@ display:
           }
           int level = co2_lv > pm_lv ? co2_lv : pm_lv;
           if (iaq_lv > level) level = iaq_lv;
+          if (id(test_level) >= 0) level = id(test_level);
 
           it.rectangle(fx, fy, 40, 40);
           if (level >= 5) {
@@ -318,14 +323,12 @@ display:
             it.filled_rectangle(fx+24, fy+26, 4, 4);
             it.filled_rectangle(fx+14, fy+30, 12, 2);
           } else if (level >= 4) {
-            // >:( angry + teeth
+            // >:( angry
             it.line(fx+8, fy+11, fx+14, fy+14); it.line(fx+8, fy+17, fx+14, fy+14);
             it.line(fx+32, fy+11, fx+26, fy+14); it.line(fx+32, fy+17, fx+26, fy+14);
-            it.filled_rectangle(fx+10, fy+26, 20, 2);
-            it.filled_rectangle(fx+12, fy+28, 4, 2);
-            it.filled_rectangle(fx+18, fy+28, 4, 2);
-            it.filled_rectangle(fx+24, fy+28, 4, 2);
-            it.filled_rectangle(fx+10, fy+30, 20, 2);
+            it.filled_rectangle(fx+12, fy+26, 16, 2);
+            it.filled_rectangle(fx+10, fy+28, 4, 2);
+            it.filled_rectangle(fx+26, fy+28, 4, 2);
           } else if (level == 3) {
             // :( worried + sweat drop
             it.filled_rectangle(fx+10, fy+11, 6, 6);
@@ -516,6 +519,7 @@ interval:
             return;
           }
 
+          if (id(test_level) >= 0) return;
           static int tick = 0;
           tick = (tick + 1) % 4;
           if (tick == 2)
@@ -574,6 +578,8 @@ interval:
           static int last_level = -1;
           if (level == last_level) return;
           last_level = level;
+          id(oled_display).show_page(id(page_face));
+          id(oled_display).update();
           if (level == 0) {
             id(buzzer).play("good:d=16,o=6,b=180:c,e,g");
           } else if (level == 1) {

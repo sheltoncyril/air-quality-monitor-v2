@@ -15,8 +15,6 @@ esphome:
           id(boot_fails) = 0;
       - display.page.show: page_face
       - component.update: oled_display
-      - rtttl.play:
-          rtttl: "boot:d=16,o=7,b=400:g,b"
 
 globals:
   - id: test_mode
@@ -82,16 +80,18 @@ interval:
 
           auto &disp = *id(oled_display);
 
-          static const char* labels[] = {"Excellent", "Good", "Fair", "Poor", "Bad"};
+          static const char* labels[] = {"Excellent", "Good", "Fair", "Poor", "Bad", "Dead"};
           static const char* tones[] = {
             "good:d=16,o=6,b=180:c,e,g",
             "ok:d=16,o=6,b=180:e,g",
             "fair:d=16,o=5,b=160:a,a",
             "poor:d=16,o=5,b=160:e,d,c",
-            "bad:d=8,o=4,b=120:c,p,c"
+            "bad:d=8,o=4,b=120:c,p,c",
+            "dead:d=4,o=5,b=80:c,p,c,p,c"
           };
 
-          if (step >= 5) {
+          if (step >= 6) {
+            id(test_level) = -1;
             id(test_mode) = 0;
             id(test_step) = 0;
             auto call = id(test_scenario).make_call();
@@ -100,5 +100,8 @@ interval:
             return;
           }
 
+          id(test_level) = step;
+          id(oled_display).show_page(id(page_face));
+          id(oled_display).update();
           id(buzzer).play(tones[step]);
           id(test_step) = step + 1;
