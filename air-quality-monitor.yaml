@@ -7,7 +7,7 @@ esphome:
   friendly_name: ${friendly_name}
   project:
     name: sheltoncyril.air-quality-monitor
-    version: "1.3.3"
+    version: "1.3.4"
   on_boot:
     priority: -100
     then:
@@ -318,10 +318,7 @@ display:
             // X_X dead
             it.line(fx+8, fy+10, fx+16, fy+18); it.line(fx+8, fy+18, fx+16, fy+10);
             it.line(fx+24, fy+10, fx+32, fy+18); it.line(fx+24, fy+18, fx+32, fy+10);
-            it.filled_rectangle(fx+14, fy+24, 12, 2);
-            it.filled_rectangle(fx+12, fy+26, 4, 4);
-            it.filled_rectangle(fx+24, fy+26, 4, 4);
-            it.filled_rectangle(fx+14, fy+30, 12, 2);
+            it.filled_rectangle(fx+12, fy+24, 16, 10);
           } else if (level >= 4) {
             // >:( angry
             it.line(fx+8, fy+11, fx+14, fy+14); it.line(fx+8, fy+17, fx+14, fy+14);
