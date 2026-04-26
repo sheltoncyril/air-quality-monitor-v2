@@ -43,6 +43,9 @@ select:
           } else if (x == "Boot Recovery") {
             id(test_mode) = 3;
             id(boot_fails) = 2;
+            // Confirm current OTA partition before reboot to prevent
+            // ESP-IDF rollback to previous firmware
+            esp_ota_mark_app_valid_cancel_rollback();
             delay(500);
             App.safe_reboot();
           } else {
