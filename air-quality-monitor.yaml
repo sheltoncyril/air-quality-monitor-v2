@@ -3,7 +3,7 @@ esphome:
   friendly_name: Air-Quality-Monitor-2
   project:
     name: sheltoncyril.air-quality-monitor
-    version: "1.1.0"
+    version: "1.2.0"
   on_boot:
     priority: -100
     then:
@@ -272,27 +272,37 @@ display:
         lambda: |-
           int w = 128;
           int fx = 44, fy = 2;
-          int score = 0;
-          if (id(co2_sensor).state > 800) score++;
-          if (id(co2_sensor).state > 1000) score++;
-          if (id(co2_sensor).state > 1500) score++;
-          if (id(co2_sensor).state > 2500) score++;
-          if (id(co2_sensor).state > 5000) score++;
-          if (id(pm25).state > 12) score++;
-          if (id(pm25).state > 35) score++;
-          if (id(pm25).state > 55) score++;
-          if (!isnan(id(iaq).state) && id(iaq).state > 100) score++;
-          if (!isnan(id(iaq).state) && id(iaq).state > 150) score++;
-          if (!isnan(id(iaq).state) && id(iaq).state > 250) score++;
+          // Per-sensor level: 0=Excellent, 1=Good, 2=Fair, 3=Poor, 4=Bad
+          float co2 = id(co2_sensor).state;
+          int co2_lv = 0;
+          if (!isnan(co2)) {
+            if (co2 > 2000) co2_lv = 4;
+            else if (co2 > 1500) co2_lv = 3;
+            else if (co2 > 1000) co2_lv = 2;
+            else if (co2 > 800) co2_lv = 1;
+          }
+          float pm = id(pm25).state;
+          int pm_lv = 0;
+          if (!isnan(pm)) {
+            if (pm > 150) pm_lv = 4;
+            else if (pm > 55) pm_lv = 3;
+            else if (pm > 35) pm_lv = 2;
+            else if (pm > 9) pm_lv = 1;
+          }
+          float iq = id(iaq).state;
+          int iaq_lv = 0;
+          if (!isnan(iq)) {
+            if (iq > 250) iaq_lv = 4;
+            else if (iq > 150) iaq_lv = 3;
+            else if (iq > 100) iaq_lv = 2;
+            else if (iq > 50) iaq_lv = 1;
+          }
+          int level = co2_lv > pm_lv ? co2_lv : pm_lv;
+          if (iaq_lv > level) level = iaq_lv;
 
           it.rectangle(fx, fy, 40, 40);
-          if (score >= 5) {
-            // X_X dead
-            it.line(fx+8, fy+10, fx+14, fy+16); it.line(fx+8, fy+16, fx+14, fy+10);
-            it.line(fx+26, fy+10, fx+32, fy+16); it.line(fx+26, fy+16, fx+32, fy+10);
-            it.rectangle(fx+14, fy+26, 12, 8);
-          } else if (score >= 4) {
-            // >_< distressed
+          if (level >= 4) {
+            // >:( angry
             it.line(fx+8, fy+11, fx+14, fy+14); it.line(fx+8, fy+17, fx+14, fy+14);
             it.line(fx+32, fy+11, fx+26, fy+14); it.line(fx+32, fy+17, fx+26, fy+14);
             it.filled_rectangle(fx+12, fy+28, 16, 2);
@@ -300,8 +310,8 @@ display:
             it.filled_rectangle(fx+26, fy+26, 4, 2);
             it.filled_rectangle(fx+14, fy+30, 4, 2);
             it.filled_rectangle(fx+22, fy+30, 4, 2);
-          } else if (score >= 3) {
-            // :( worried + sweat drop — frown: bar low, corners high
+          } else if (level == 3) {
+            // :( worried + sweat drop
             it.filled_rectangle(fx+10, fy+11, 6, 6);
             it.filled_rectangle(fx+24, fy+11, 6, 6);
             it.filled_rectangle(fx+12, fy+26, 16, 2);
@@ -309,20 +319,20 @@ display:
             it.filled_rectangle(fx+26, fy+28, 4, 2);
             it.filled_rectangle(fx+34, fy+8, 2, 4);
             it.filled_rectangle(fx+33, fy+12, 4, 2);
-          } else if (score >= 2) {
+          } else if (level == 2) {
             // :| neutral
             it.filled_rectangle(fx+10, fy+11, 6, 6);
             it.filled_rectangle(fx+24, fy+11, 6, 6);
             it.filled_rectangle(fx+12, fy+28, 16, 2);
-          } else if (score >= 1) {
-            // :) happy — smile: bar high, corners low
+          } else if (level == 1) {
+            // :) happy
             it.filled_rectangle(fx+10, fy+11, 6, 6);
             it.filled_rectangle(fx+24, fy+11, 6, 6);
             it.filled_rectangle(fx+12, fy+30, 16, 2);
             it.filled_rectangle(fx+10, fy+28, 4, 2);
             it.filled_rectangle(fx+26, fy+28, 4, 2);
           } else {
-            // ^_^ ecstatic — eyes: v shapes (render as ^ after 180 rotation)
+            // ^_^ ecstatic
             it.line(fx+8, fy+10, fx+13, fy+16); it.line(fx+13, fy+16, fx+18, fy+10);
             it.line(fx+22, fy+10, fx+27, fy+16); it.line(fx+27, fy+16, fx+32, fy+10);
             it.filled_rectangle(fx+10, fy+30, 20, 2);
@@ -495,39 +505,57 @@ interval:
           if (millis() - boot_time < 90000) return;
           if (isnan(id(co2_sensor).state) || isnan(id(pm25).state)) return;
 
-          static bool co2_1k = false, co2_1k5 = false;
-          static bool pm_35 = false, pm_55 = false;
-          static bool iaq_150 = false, iaq_250 = false;
+          // Per-sensor level with Schmitt trigger hysteresis
+          static int co2_lv = 0, pm_lv = 0, iaq_lv = 0;
 
           float co2 = id(co2_sensor).state;
-          if (co2 > 1000) co2_1k = true; else if (co2 < 900) co2_1k = false;
-          if (co2 > 1500) co2_1k5 = true; else if (co2 < 1350) co2_1k5 = false;
+          if (co2 > 2000) co2_lv = 4;
+          else if (co2 > 1500 && co2_lv < 3) co2_lv = 3;
+          else if (co2 > 1000 && co2_lv < 2) co2_lv = 2;
+          else if (co2 > 800 && co2_lv < 1) co2_lv = 1;
+          if (co2_lv == 4 && co2 < 1800) co2_lv = 3;
+          if (co2_lv == 3 && co2 < 1350) co2_lv = 2;
+          if (co2_lv == 2 && co2 < 900) co2_lv = 1;
+          if (co2_lv == 1 && co2 < 720) co2_lv = 0;
 
           float pm = id(pm25).state;
-          if (pm > 35) pm_35 = true; else if (pm < 30) pm_35 = false;
-          if (pm > 55) pm_55 = true; else if (pm < 48) pm_55 = false;
+          if (pm > 150) pm_lv = 4;
+          else if (pm > 55 && pm_lv < 3) pm_lv = 3;
+          else if (pm > 35 && pm_lv < 2) pm_lv = 2;
+          else if (pm > 9 && pm_lv < 1) pm_lv = 1;
+          if (pm_lv == 4 && pm < 130) pm_lv = 3;
+          if (pm_lv == 3 && pm < 48) pm_lv = 2;
+          if (pm_lv == 2 && pm < 30) pm_lv = 1;
+          if (pm_lv == 1 && pm < 7) pm_lv = 0;
 
           float iq = id(iaq).state;
           bool iq_valid = !isnan(iq);
-          if (iq_valid && iq > 150) iaq_150 = true; else if (!iq_valid || iq < 130) iaq_150 = false;
-          if (iq_valid && iq > 250) iaq_250 = true; else if (!iq_valid || iq < 220) iaq_250 = false;
+          if (iq_valid && iq > 250) iaq_lv = 4;
+          else if (iq_valid && iq > 150 && iaq_lv < 3) iaq_lv = 3;
+          else if (iq_valid && iq > 100 && iaq_lv < 2) iaq_lv = 2;
+          else if (iq_valid && iq > 50 && iaq_lv < 1) iaq_lv = 1;
+          if (!iq_valid) iaq_lv = 0;
+          else if (iaq_lv == 4 && iq < 220) iaq_lv = 3;
+          else if (iaq_lv == 3 && iq < 130) iaq_lv = 2;
+          else if (iaq_lv == 2 && iq < 85) iaq_lv = 1;
+          else if (iaq_lv == 1 && iq < 45) iaq_lv = 0;
 
-          int score = co2_1k + co2_1k5 + pm_35 + pm_55 + iaq_150 + iaq_250;
-          static int last_score = -1;
-          if (score == last_score) return;
-          last_score = score;
-          if (score == 0) {
+          int level = co2_lv > pm_lv ? co2_lv : pm_lv;
+          if (iaq_lv > level) level = iaq_lv;
+
+          static int last_level = -1;
+          if (level == last_level) return;
+          last_level = level;
+          if (level == 0) {
             id(buzzer).play("good:d=16,o=6,b=180:c,e,g");
-          } else if (score == 1) {
+          } else if (level == 1) {
             id(buzzer).play("ok:d=16,o=6,b=180:e,g");
-          } else if (score == 2) {
+          } else if (level == 2) {
             id(buzzer).play("fair:d=16,o=5,b=160:a,a");
-          } else if (score == 3) {
+          } else if (level == 3) {
             id(buzzer).play("poor:d=16,o=5,b=160:e,d,c");
-          } else if (score == 4) {
-            id(buzzer).play("bad:d=16,o=5,b=140:e,d#,c");
           } else {
-            id(buzzer).play("vbad:d=8,o=4,b=120:c,p,c");
+            id(buzzer).play("bad:d=8,o=4,b=120:c,p,c");
           }
 
 
@@ -630,15 +658,13 @@ text_sensor:
     id: co2_status
     icon: mdi:molecule-co2
     lambda: |-
-      if (id(co2_sensor).state < 800) {
-        return {"Good"};
-      } else if (id(co2_sensor).state < 1000) {
-        return {"Fair"};
-      } else if (id(co2_sensor).state < 1500) {
-        return {"Poor"};
-      } else {
-        return {"Bad"};
-      }
+      float co2 = id(co2_sensor).state;
+      if (isnan(co2)) return {"--"};
+      if (co2 <= 800) return {"Excellent"};
+      if (co2 <= 1000) return {"Good"};
+      if (co2 <= 1500) return {"Fair"};
+      if (co2 <= 2000) return {"Poor"};
+      return {"Bad"};
     update_interval: 15s
 
   # PM2.5 Status
@@ -647,15 +673,13 @@ text_sensor:
     id: pm25_status
     icon: mdi:air-filter
     lambda: |-
-      if (id(pm25).state < 12) {
-        return {"Good"};
-      } else if (id(pm25).state < 35) {
-        return {"Fair"};
-      } else if (id(pm25).state < 55) {
-        return {"Poor"};
-      } else {
-        return {"Bad"};
-      }
+      float pm = id(pm25).state;
+      if (isnan(pm)) return {"--"};
+      if (pm <= 9) return {"Excellent"};
+      if (pm <= 35) return {"Good"};
+      if (pm <= 55) return {"Fair"};
+      if (pm <= 150) return {"Poor"};
+      return {"Bad"};
     update_interval: 30s
 
   # Overall Air Quality (CO2 + PM2.5 + IAQ based)
@@ -664,16 +688,36 @@ text_sensor:
     id: air_quality
     icon: mdi:air-purifier
     lambda: |-
-      int score = 0;
-      if (id(co2_sensor).state > 1000) score++;
-      if (id(co2_sensor).state > 1500) score++;
-      if (id(pm25).state > 35) score++;
-      if (!isnan(id(iaq).state) && id(iaq).state > 150) score++;
-      if (!isnan(id(iaq).state) && id(iaq).state > 250) score++;
-      if (score == 0) return {"Excellent"};
-      else if (score == 1) return {"Good"};
-      else if (score == 2) return {"Fair"};
-      else if (score == 3) return {"Poor"};
+      float co2 = id(co2_sensor).state;
+      int co2_lv = 0;
+      if (!isnan(co2)) {
+        if (co2 > 2000) co2_lv = 4;
+        else if (co2 > 1500) co2_lv = 3;
+        else if (co2 > 1000) co2_lv = 2;
+        else if (co2 > 800) co2_lv = 1;
+      }
+      float pm = id(pm25).state;
+      int pm_lv = 0;
+      if (!isnan(pm)) {
+        if (pm > 150) pm_lv = 4;
+        else if (pm > 55) pm_lv = 3;
+        else if (pm > 35) pm_lv = 2;
+        else if (pm > 9) pm_lv = 1;
+      }
+      float iq = id(iaq).state;
+      int iaq_lv = 0;
+      if (!isnan(iq)) {
+        if (iq > 250) iaq_lv = 4;
+        else if (iq > 150) iaq_lv = 3;
+        else if (iq > 100) iaq_lv = 2;
+        else if (iq > 50) iaq_lv = 1;
+      }
+      int level = co2_lv > pm_lv ? co2_lv : pm_lv;
+      if (iaq_lv > level) level = iaq_lv;
+      if (level == 0) return {"Excellent"};
+      else if (level == 1) return {"Good"};
+      else if (level == 2) return {"Fair"};
+      else if (level == 3) return {"Poor"};
       else return {"Bad"};
     update_interval: 15s
 
@@ -716,7 +760,33 @@ binary_sensor:
     name: "Ventilation Needed"
     icon: mdi:window-open-variant
     lambda: |-
-      return (id(co2_sensor).state > 1200 || id(pm25).state > 35 || (!isnan(id(iaq).state) && id(iaq).state > 200));
+      float co2 = id(co2_sensor).state;
+      int co2_lv = 0;
+      if (!isnan(co2)) {
+        if (co2 > 2000) co2_lv = 4;
+        else if (co2 > 1500) co2_lv = 3;
+        else if (co2 > 1000) co2_lv = 2;
+        else if (co2 > 800) co2_lv = 1;
+      }
+      float pm = id(pm25).state;
+      int pm_lv = 0;
+      if (!isnan(pm)) {
+        if (pm > 150) pm_lv = 4;
+        else if (pm > 55) pm_lv = 3;
+        else if (pm > 35) pm_lv = 2;
+        else if (pm > 9) pm_lv = 1;
+      }
+      float iq = id(iaq).state;
+      int iaq_lv = 0;
+      if (!isnan(iq)) {
+        if (iq > 250) iaq_lv = 4;
+        else if (iq > 150) iaq_lv = 3;
+        else if (iq > 100) iaq_lv = 2;
+        else if (iq > 50) iaq_lv = 1;
+      }
+      int level = co2_lv > pm_lv ? co2_lv : pm_lv;
+      if (iaq_lv > level) level = iaq_lv;
+      return level >= 2;
 
 button:
   - platform: template
