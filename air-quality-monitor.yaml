@@ -3,7 +3,7 @@ esphome:
   friendly_name: Air-Quality-Monitor-2
   project:
     name: sheltoncyril.air-quality-monitor
-    version: "1.2.0"
+    version: "1.3.0"
   on_boot:
     priority: -100
     then:
@@ -290,8 +290,9 @@ display:
             else if (pm > 9) pm_lv = 1;
           }
           float iq = id(iaq).state;
+          bool iaq_ready = !isnan(iq) && !isnan(id(iaq_accuracy_num).state) && (int)id(iaq_accuracy_num).state >= 2;
           int iaq_lv = 0;
-          if (!isnan(iq)) {
+          if (iaq_ready) {
             if (iq > 250) iaq_lv = 4;
             else if (iq > 150) iaq_lv = 3;
             else if (iq > 100) iaq_lv = 2;
@@ -348,8 +349,8 @@ display:
           it.line(0, 88, w, 88);
 
           it.printf(0, 92, id(font_mid), "IAQ");
-          if (isnan(id(iaq).state)) {
-            it.printf(0, 106, id(font_mid), "--");
+          if (!iaq_ready) {
+            it.printf(0, 106, id(font_mid), "Cal.");
           } else {
             it.printf(0, 106, id(font_mid), "%.0f", id(iaq).state);
           }
@@ -529,12 +530,12 @@ interval:
           if (pm_lv == 1 && pm < 7) pm_lv = 0;
 
           float iq = id(iaq).state;
-          bool iq_valid = !isnan(iq);
-          if (iq_valid && iq > 250) iaq_lv = 4;
-          else if (iq_valid && iq > 150 && iaq_lv < 3) iaq_lv = 3;
-          else if (iq_valid && iq > 100 && iaq_lv < 2) iaq_lv = 2;
-          else if (iq_valid && iq > 50 && iaq_lv < 1) iaq_lv = 1;
-          if (!iq_valid) iaq_lv = 0;
+          bool iaq_ready = !isnan(iq) && !isnan(id(iaq_accuracy_num).state) && (int)id(iaq_accuracy_num).state >= 2;
+          if (iaq_ready && iq > 250) iaq_lv = 4;
+          else if (iaq_ready && iq > 150 && iaq_lv < 3) iaq_lv = 3;
+          else if (iaq_ready && iq > 100 && iaq_lv < 2) iaq_lv = 2;
+          else if (iaq_ready && iq > 50 && iaq_lv < 1) iaq_lv = 1;
+          if (!iaq_ready) iaq_lv = 0;
           else if (iaq_lv == 4 && iq < 220) iaq_lv = 3;
           else if (iaq_lv == 3 && iq < 130) iaq_lv = 2;
           else if (iaq_lv == 2 && iq < 85) iaq_lv = 1;
@@ -611,6 +612,9 @@ sensor:
     gas_percentage:
       name: "Gas Percentage"
       id: gas_pct
+    iaq_accuracy:
+      name: "IAQ Accuracy Numeric"
+      id: iaq_accuracy_num
 
   # VEML7700 — Ambient Light
   - platform: veml7700
@@ -705,8 +709,9 @@ text_sensor:
         else if (pm > 9) pm_lv = 1;
       }
       float iq = id(iaq).state;
+      bool iaq_ready = !isnan(iq) && !isnan(id(iaq_accuracy_num).state) && (int)id(iaq_accuracy_num).state >= 2;
       int iaq_lv = 0;
-      if (!isnan(iq)) {
+      if (iaq_ready) {
         if (iq > 250) iaq_lv = 4;
         else if (iq > 150) iaq_lv = 3;
         else if (iq > 100) iaq_lv = 2;
@@ -777,8 +782,9 @@ binary_sensor:
         else if (pm > 9) pm_lv = 1;
       }
       float iq = id(iaq).state;
+      bool iaq_ready = !isnan(iq) && !isnan(id(iaq_accuracy_num).state) && (int)id(iaq_accuracy_num).state >= 2;
       int iaq_lv = 0;
-      if (!isnan(iq)) {
+      if (iaq_ready) {
         if (iq > 250) iaq_lv = 4;
         else if (iq > 150) iaq_lv = 3;
         else if (iq > 100) iaq_lv = 2;
