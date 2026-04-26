@@ -350,7 +350,7 @@ display:
 
           it.printf(0, 92, id(font_mid), "IAQ");
           if (!iaq_ready) {
-            it.printf(0, 106, id(font_mid), "Cal.");
+            it.printf(0, 106, id(font_mid), "--");
           } else {
             it.printf(0, 106, id(font_mid), "%.0f", id(iaq).state);
           }
@@ -370,14 +370,19 @@ display:
           it.printf(w, 20, id(font_sm), TextAlign::TOP_RIGHT, "%.0f ppm", id(co2_sensor).state);
           it.printf(0, 34, id(font_sm), "eCO2");
           it.printf(w, 34, id(font_sm), TextAlign::TOP_RIGHT, "%.0f ppm", id(co2_eq).state);
+          bool iaq_ready = !isnan(id(iaq).state) && !isnan(id(iaq_accuracy_num).state) && (int)id(iaq_accuracy_num).state >= 2;
           it.printf(0, 48, id(font_sm), "IAQ");
-          if (isnan(id(iaq).state)) {
-            it.printf(w, 48, id(font_sm), TextAlign::TOP_RIGHT, "--");
+          if (!iaq_ready) {
+            it.printf(w, 48, id(font_sm), TextAlign::TOP_RIGHT, "Cal.");
           } else {
             it.printf(w, 48, id(font_sm), TextAlign::TOP_RIGHT, "%.0f", id(iaq).state);
           }
           it.printf(0, 62, id(font_sm), "Static IAQ");
-          it.printf(w, 62, id(font_sm), TextAlign::TOP_RIGHT, "%.0f", id(static_iaq).state);
+          if (!iaq_ready) {
+            it.printf(w, 62, id(font_sm), TextAlign::TOP_RIGHT, "Cal.");
+          } else {
+            it.printf(w, 62, id(font_sm), TextAlign::TOP_RIGHT, "%.0f", id(static_iaq).state);
+          }
           it.printf(0, 76, id(font_sm), "Gas Res");
           it.printf(w, 76, id(font_sm), TextAlign::TOP_RIGHT, "%.0f ohm", id(gas_res).state);
           it.printf(0, 90, id(font_sm), "PM 1.0");
