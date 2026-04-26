@@ -352,9 +352,10 @@ display:
 
           it.line(0, 88, w, 88);
 
+          float iq_val = id(iaq).state;
           it.printf(0, 92, id(font_mid), iaq_ready ? "IAQ" : "~IAQ");
-          if (!isnan(id(iaq).state)) {
-            it.printf(0, 106, id(font_mid), "%.0f", id(iaq).state);
+          if (!isnan(iq_val) && iq_val > 0) {
+            it.printf(0, 106, id(font_mid), "%.0f", iq_val);
           } else {
             it.printf(0, 106, id(font_mid), "--");
           }
@@ -376,20 +377,22 @@ display:
           it.printf(w, 34, id(font_sm), TextAlign::TOP_RIGHT, "%.0f ppm", id(co2_eq).state);
           bool iaq_ready = !isnan(id(iaq).state) && !isnan(id(iaq_accuracy_num).state) && (int)id(iaq_accuracy_num).state >= 2;
           it.printf(0, 48, id(font_sm), "IAQ");
-          if (!iaq_ready && !isnan(id(iaq).state)) {
-            it.printf(w, 48, id(font_sm), TextAlign::TOP_RIGHT, "~%.0f", id(iaq).state);
-          } else if (!iaq_ready) {
-            it.printf(w, 48, id(font_sm), TextAlign::TOP_RIGHT, "--");
+          float iq2 = id(iaq).state;
+          if (!iaq_ready && !isnan(iq2) && iq2 > 0) {
+            it.printf(w, 48, id(font_sm), TextAlign::TOP_RIGHT, "~%.0f", iq2);
+          } else if (iaq_ready && !isnan(iq2) && iq2 > 0) {
+            it.printf(w, 48, id(font_sm), TextAlign::TOP_RIGHT, "%.0f", iq2);
           } else {
-            it.printf(w, 48, id(font_sm), TextAlign::TOP_RIGHT, "%.0f", id(iaq).state);
+            it.printf(w, 48, id(font_sm), TextAlign::TOP_RIGHT, "--");
           }
           it.printf(0, 62, id(font_sm), "Static IAQ");
-          if (!iaq_ready && !isnan(id(static_iaq).state)) {
-            it.printf(w, 62, id(font_sm), TextAlign::TOP_RIGHT, "~%.0f", id(static_iaq).state);
-          } else if (!iaq_ready) {
-            it.printf(w, 62, id(font_sm), TextAlign::TOP_RIGHT, "--");
+          float siq = id(static_iaq).state;
+          if (!iaq_ready && !isnan(siq) && siq > 0) {
+            it.printf(w, 62, id(font_sm), TextAlign::TOP_RIGHT, "~%.0f", siq);
+          } else if (iaq_ready && !isnan(siq) && siq > 0) {
+            it.printf(w, 62, id(font_sm), TextAlign::TOP_RIGHT, "%.0f", siq);
           } else {
-            it.printf(w, 62, id(font_sm), TextAlign::TOP_RIGHT, "%.0f", id(static_iaq).state);
+            it.printf(w, 62, id(font_sm), TextAlign::TOP_RIGHT, "--");
           }
           it.printf(0, 76, id(font_sm), "Gas Res");
           it.printf(w, 76, id(font_sm), TextAlign::TOP_RIGHT, "%.0f ohm", id(gas_res).state);
