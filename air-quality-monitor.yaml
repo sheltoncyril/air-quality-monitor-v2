@@ -7,7 +7,7 @@ esphome:
   friendly_name: ${friendly_name}
   project:
     name: sheltoncyril.air-quality-monitor
-    version: "1.3.4"
+    version: "1.4.0"
   on_boot:
     priority: -100
     then:
@@ -538,20 +538,24 @@ interval:
           static int co2_lv = 0, pm_lv = 0, iaq_lv = 0;
 
           float co2 = id(co2_sensor).state;
-          if (co2 > 2000) co2_lv = 4;
+          if (co2 > 3000) co2_lv = 5;
+          else if (co2 > 2000) co2_lv = 4;
           else if (co2 > 1500 && co2_lv < 3) co2_lv = 3;
           else if (co2 > 1000 && co2_lv < 2) co2_lv = 2;
           else if (co2 > 800 && co2_lv < 1) co2_lv = 1;
+          if (co2_lv == 5 && co2 < 2700) co2_lv = 4;
           if (co2_lv == 4 && co2 < 1800) co2_lv = 3;
           if (co2_lv == 3 && co2 < 1350) co2_lv = 2;
           if (co2_lv == 2 && co2 < 900) co2_lv = 1;
           if (co2_lv == 1 && co2 < 720) co2_lv = 0;
 
           float pm = id(pm25).state;
-          if (pm > 150) pm_lv = 4;
+          if (pm > 250) pm_lv = 5;
+          else if (pm > 150) pm_lv = 4;
           else if (pm > 55 && pm_lv < 3) pm_lv = 3;
           else if (pm > 35 && pm_lv < 2) pm_lv = 2;
           else if (pm > 9 && pm_lv < 1) pm_lv = 1;
+          if (pm_lv == 5 && pm < 220) pm_lv = 4;
           if (pm_lv == 4 && pm < 130) pm_lv = 3;
           if (pm_lv == 3 && pm < 48) pm_lv = 2;
           if (pm_lv == 2 && pm < 30) pm_lv = 1;
@@ -559,11 +563,13 @@ interval:
 
           float iq = id(iaq).state;
           bool iaq_ready = !isnan(iq) && !isnan(id(iaq_accuracy_num).state) && (int)id(iaq_accuracy_num).state >= 2;
-          if (iaq_ready && iq > 250) iaq_lv = 4;
+          if (iaq_ready && iq > 350) iaq_lv = 5;
+          else if (iaq_ready && iq > 250) iaq_lv = 4;
           else if (iaq_ready && iq > 150 && iaq_lv < 3) iaq_lv = 3;
           else if (iaq_ready && iq > 100 && iaq_lv < 2) iaq_lv = 2;
           else if (iaq_ready && iq > 50 && iaq_lv < 1) iaq_lv = 1;
           if (!iaq_ready) iaq_lv = 0;
+          else if (iaq_lv == 5 && iq < 310) iaq_lv = 4;
           else if (iaq_lv == 4 && iq < 220) iaq_lv = 3;
           else if (iaq_lv == 3 && iq < 130) iaq_lv = 2;
           else if (iaq_lv == 2 && iq < 85) iaq_lv = 1;
@@ -571,22 +577,44 @@ interval:
 
           int level = co2_lv > pm_lv ? co2_lv : pm_lv;
           if (iaq_lv > level) level = iaq_lv;
+          if (id(test_level) >= 0) level = id(test_level);
 
           static int last_level = -1;
-          if (level == last_level) return;
-          last_level = level;
-          id(oled_display).show_page(id(page_face));
-          id(oled_display).update();
-          if (level == 0) {
-            id(buzzer).play("good:d=16,o=6,b=180:c,e,g");
-          } else if (level == 1) {
-            id(buzzer).play("ok:d=16,o=6,b=180:e,g");
-          } else if (level == 2) {
-            id(buzzer).play("fair:d=16,o=5,b=160:a,a");
-          } else if (level == 3) {
-            id(buzzer).play("poor:d=16,o=5,b=160:e,d,c");
-          } else {
-            id(buzzer).play("bad:d=8,o=4,b=120:c,p,c");
+          static int sustained_ticks = 0;
+          static int last_nag_tick = 0;
+
+          if (level != last_level) {
+            last_level = level;
+            sustained_ticks = 0;
+            last_nag_tick = 0;
+            id(oled_display).show_page(id(page_face));
+            id(oled_display).update();
+            if (level == 0) {
+              id(buzzer).play("good:d=16,o=6,b=180:c,e,g");
+            } else if (level == 1) {
+              id(buzzer).play("ok:d=16,o=6,b=180:e,g");
+            } else if (level == 2) {
+              id(buzzer).play("fair:d=16,o=5,b=160:a,a");
+            } else if (level == 3) {
+              id(buzzer).play("poor:d=16,o=5,b=160:e,d,c");
+            } else {
+              id(buzzer).play("bad:d=8,o=4,b=120:c,p,c");
+            }
+            return;
+          }
+
+          if (level < 4) return;
+          sustained_ticks++;
+          int nag_interval = (level >= 5) ? 5 : 10;
+          if (sustained_ticks - last_nag_tick >= nag_interval) {
+            last_nag_tick = sustained_ticks;
+            id(oled_display).show_page(id(page_face));
+            id(oled_display).update();
+            if (level >= 5) {
+              id(buzzer).play("nag5:d=16,o=6,b=200:c,p,c,p,c");
+            } else {
+              id(buzzer).play("nag4:d=16,o=6,b=160:c,p,c");
+            }
           }
 
 

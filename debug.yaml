@@ -33,6 +33,8 @@ select:
     options:
       - "None"
       - "Scoring Walkthrough"
+      - "Hold Level 4"
+      - "Hold Level 5"
       - "HW Failure"
       - "Boot Recovery"
     initial_option: "None"
@@ -42,6 +44,16 @@ select:
           if (x == "Scoring Walkthrough") {
             id(test_mode) = 1;
             id(test_step) = 0;
+          } else if (x == "Hold Level 4") {
+            id(test_mode) = 4;
+            id(test_level) = 4;
+            id(oled_display).show_page(id(page_face));
+            id(oled_display).update();
+          } else if (x == "Hold Level 5") {
+            id(test_mode) = 5;
+            id(test_level) = 5;
+            id(oled_display).show_page(id(page_face));
+            id(oled_display).update();
           } else if (x == "HW Failure") {
             id(test_mode) = 2;
             id(hw_error) = true;
@@ -64,6 +76,7 @@ select:
               id(hw_error) = false;
               id(fail_co2) = false;
             }
+            id(test_level) = -1;
             id(test_mode) = 0;
             id(test_step) = 0;
           }
