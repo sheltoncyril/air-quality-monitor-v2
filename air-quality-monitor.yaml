@@ -7,7 +7,7 @@ esphome:
   friendly_name: ${friendly_name}
   project:
     name: sheltoncyril.air-quality-monitor
-    version: "1.3.2"
+    version: "1.3.3"
   on_boot:
     priority: -100
     then:
@@ -280,7 +280,8 @@ display:
           float co2 = id(co2_sensor).state;
           int co2_lv = 0;
           if (!isnan(co2)) {
-            if (co2 > 2000) co2_lv = 4;
+            if (co2 > 3000) co2_lv = 5;
+            else if (co2 > 2000) co2_lv = 4;
             else if (co2 > 1500) co2_lv = 3;
             else if (co2 > 1000) co2_lv = 2;
             else if (co2 > 800) co2_lv = 1;
@@ -288,7 +289,8 @@ display:
           float pm = id(pm25).state;
           int pm_lv = 0;
           if (!isnan(pm)) {
-            if (pm > 150) pm_lv = 4;
+            if (pm > 250) pm_lv = 5;
+            else if (pm > 150) pm_lv = 4;
             else if (pm > 55) pm_lv = 3;
             else if (pm > 35) pm_lv = 2;
             else if (pm > 9) pm_lv = 1;
@@ -297,7 +299,8 @@ display:
           bool iaq_ready = !isnan(iq) && !isnan(id(iaq_accuracy_num).state) && (int)id(iaq_accuracy_num).state >= 2;
           int iaq_lv = 0;
           if (iaq_ready) {
-            if (iq > 250) iaq_lv = 4;
+            if (iq > 350) iaq_lv = 5;
+            else if (iq > 250) iaq_lv = 4;
             else if (iq > 150) iaq_lv = 3;
             else if (iq > 100) iaq_lv = 2;
             else if (iq > 50) iaq_lv = 1;
@@ -306,15 +309,23 @@ display:
           if (iaq_lv > level) level = iaq_lv;
 
           it.rectangle(fx, fy, 40, 40);
-          if (level >= 4) {
-            // >:( angry
+          if (level >= 5) {
+            // X_X dead
+            it.line(fx+8, fy+10, fx+16, fy+18); it.line(fx+8, fy+18, fx+16, fy+10);
+            it.line(fx+24, fy+10, fx+32, fy+18); it.line(fx+24, fy+18, fx+32, fy+10);
+            it.filled_rectangle(fx+14, fy+24, 12, 2);
+            it.filled_rectangle(fx+12, fy+26, 4, 4);
+            it.filled_rectangle(fx+24, fy+26, 4, 4);
+            it.filled_rectangle(fx+14, fy+30, 12, 2);
+          } else if (level >= 4) {
+            // >:( angry + teeth
             it.line(fx+8, fy+11, fx+14, fy+14); it.line(fx+8, fy+17, fx+14, fy+14);
             it.line(fx+32, fy+11, fx+26, fy+14); it.line(fx+32, fy+17, fx+26, fy+14);
-            it.filled_rectangle(fx+12, fy+26, 16, 2);
-            it.filled_rectangle(fx+10, fy+28, 4, 2);
-            it.filled_rectangle(fx+26, fy+28, 4, 2);
-            it.filled_rectangle(fx+14, fy+30, 4, 2);
-            it.filled_rectangle(fx+22, fy+30, 4, 2);
+            it.filled_rectangle(fx+10, fy+26, 20, 2);
+            it.filled_rectangle(fx+12, fy+28, 4, 2);
+            it.filled_rectangle(fx+18, fy+28, 4, 2);
+            it.filled_rectangle(fx+24, fy+28, 4, 2);
+            it.filled_rectangle(fx+10, fy+30, 20, 2);
           } else if (level == 3) {
             // :( worried + sweat drop
             it.filled_rectangle(fx+10, fy+11, 6, 6);
