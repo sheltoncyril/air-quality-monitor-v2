@@ -5,6 +5,19 @@ substitutions:
 packages:
   base: !include air-quality-monitor.yaml
 
+esphome:
+  on_boot:
+    priority: -100
+    then:
+      - lambda: |-
+          id(booted) = true;
+          id(boot_phase) = 3;
+          id(boot_fails) = 0;
+      - display.page.show: page_face
+      - component.update: oled_display
+      - rtttl.play:
+          rtttl: "boot:d=16,o=7,b=400:g,b"
+
 globals:
   - id: test_mode
     type: int
