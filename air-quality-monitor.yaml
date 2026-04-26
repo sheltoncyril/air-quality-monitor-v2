@@ -7,7 +7,7 @@ esphome:
   friendly_name: ${friendly_name}
   project:
     name: sheltoncyril.air-quality-monitor
-    version: "1.4.0"
+    version: "1.4.1"
   on_boot:
     priority: -100
     then:
@@ -605,7 +605,7 @@ interval:
 
           if (level < 4) return;
           sustained_ticks++;
-          int nag_interval = (level >= 5) ? 5 : 10;
+          int nag_interval = (level >= 5) ? 5 : 30;
           if (sustained_ticks - last_nag_tick >= nag_interval) {
             last_nag_tick = sustained_ticks;
             id(oled_display).show_page(id(page_face));
