@@ -377,13 +377,13 @@ display:
           bool iaq_ready = !isnan(id(iaq).state) && !isnan(id(iaq_accuracy_num).state) && (int)id(iaq_accuracy_num).state >= 2;
           it.printf(0, 48, id(font_sm), "IAQ");
           if (!iaq_ready) {
-            it.printf(w, 48, id(font_sm), TextAlign::TOP_RIGHT, "Cal.");
+            it.printf(w, 48, id(font_sm), TextAlign::TOP_RIGHT, "Calibrating");
           } else {
             it.printf(w, 48, id(font_sm), TextAlign::TOP_RIGHT, "%.0f", id(iaq).state);
           }
           it.printf(0, 62, id(font_sm), "Static IAQ");
           if (!iaq_ready) {
-            it.printf(w, 62, id(font_sm), TextAlign::TOP_RIGHT, "Cal.");
+            it.printf(w, 62, id(font_sm), TextAlign::TOP_RIGHT, "Calibrating");
           } else {
             it.printf(w, 62, id(font_sm), TextAlign::TOP_RIGHT, "%.0f", id(static_iaq).state);
           }
