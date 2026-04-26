@@ -353,7 +353,9 @@ display:
           it.line(0, 88, w, 88);
 
           it.printf(0, 92, id(font_mid), "IAQ");
-          if (!iaq_ready) {
+          if (!iaq_ready && !isnan(id(iaq).state)) {
+            it.printf(0, 106, id(font_mid), "~%.0f", id(iaq).state);
+          } else if (!iaq_ready) {
             it.printf(0, 106, id(font_mid), "--");
           } else {
             it.printf(0, 106, id(font_mid), "%.0f", id(iaq).state);
