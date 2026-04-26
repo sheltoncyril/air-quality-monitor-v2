@@ -362,8 +362,8 @@ display:
           it.printf(w, 92, id(font_mid), TextAlign::TOP_RIGHT, "PM2.5");
           it.printf(w, 106, id(font_mid), TextAlign::TOP_RIGHT, "%.0f ug", id(pm25).state);
 
-          it.printf(w / 2 - 10, 92, id(font_mid), TextAlign::TOP_CENTER, "Temp");
-          it.printf(w / 2 - 10, 106, id(font_mid), TextAlign::TOP_CENTER, "%.1f C", id(temp_bme).state);
+          it.printf(w / 2 - 6, 92, id(font_mid), TextAlign::TOP_CENTER, "Temp");
+          it.printf(w / 2 - 6, 106, id(font_mid), TextAlign::TOP_CENTER, "%.1fC", id(temp_bme).state);
 
       - id: page_air
         lambda: |-
@@ -410,13 +410,13 @@ display:
           it.line(0, 16, w, 16);
 
           it.printf(0, 20, id(font_sm), "Temp");
-          it.printf(w, 20, id(font_sm), TextAlign::TOP_RIGHT, "%.1f C", id(temp_bme).state);
+          it.printf(w, 20, id(font_sm), TextAlign::TOP_RIGHT, "%.1fC", id(temp_bme).state);
           it.printf(0, 32, id(font_sm), "Humidity");
           it.printf(w, 32, id(font_sm), TextAlign::TOP_RIGHT, "%.1f%%", id(hum_bme).state);
           it.printf(0, 44, id(font_sm), "Pressure");
           it.printf(w, 44, id(font_sm), TextAlign::TOP_RIGHT, "%.0f hPa", id(pressure_sensor).state);
           it.printf(0, 56, id(font_sm), "Dew Point");
-          it.printf(w, 56, id(font_sm), TextAlign::TOP_RIGHT, "%.1f C", id(dew_point).state);
+          it.printf(w, 56, id(font_sm), TextAlign::TOP_RIGHT, "%.1fC", id(dew_point).state);
           it.printf(0, 68, id(font_sm), "Abs Humidity");
           it.printf(w, 68, id(font_sm), TextAlign::TOP_RIGHT, "%.1f g/m3", id(abs_hum).state);
           it.printf(0, 80, id(font_sm), "Light");
