@@ -352,13 +352,11 @@ display:
 
           it.line(0, 88, w, 88);
 
-          it.printf(0, 92, id(font_mid), "IAQ");
-          if (!iaq_ready && !isnan(id(iaq).state)) {
-            it.printf(0, 106, id(font_mid), "~%.0f", id(iaq).state);
-          } else if (!iaq_ready) {
-            it.printf(0, 106, id(font_mid), "--");
-          } else {
+          it.printf(0, 92, id(font_mid), iaq_ready ? "IAQ" : "~IAQ");
+          if (!isnan(id(iaq).state)) {
             it.printf(0, 106, id(font_mid), "%.0f", id(iaq).state);
+          } else {
+            it.printf(0, 106, id(font_mid), "--");
           }
           it.printf(w, 92, id(font_mid), TextAlign::TOP_RIGHT, "PM2.5");
           it.printf(w, 106, id(font_mid), TextAlign::TOP_RIGHT, "%.0f ug", id(pm25).state);
