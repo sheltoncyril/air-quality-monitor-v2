@@ -1,6 +1,10 @@
-esphome:
-  name: air-quality-monitor-2
+substitutions:
+  device_name: air-quality-monitor-2
   friendly_name: Air-Quality-Monitor-2
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
   project:
     name: sheltoncyril.air-quality-monitor
     version: "1.3.0"

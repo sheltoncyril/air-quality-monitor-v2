@@ -1,0 +1,88 @@
+substitutions:
+  device_name: air-quality-monitor-2-debug
+  friendly_name: Air-Quality-Monitor-2-DEBUG
+
+packages:
+  base: !include air-quality-monitor.yaml
+
+globals:
+  - id: test_mode
+    type: int
+    restore_value: false
+    initial_value: '0'
+  - id: test_step
+    type: int
+    restore_value: false
+    initial_value: '0'
+
+select:
+  - platform: template
+    name: "Test Scenario"
+    id: test_scenario
+    options:
+      - "None"
+      - "Scoring Walkthrough"
+      - "HW Failure"
+      - "Boot Recovery"
+    initial_option: "None"
+    optimistic: true
+    on_value:
+      - lambda: |-
+          if (x == "Scoring Walkthrough") {
+            id(test_mode) = 1;
+            id(test_step) = 0;
+          } else if (x == "HW Failure") {
+            id(test_mode) = 2;
+            id(hw_error) = true;
+            id(fail_co2) = true;
+            id(fail_pm) = false;
+            id(fail_bme) = false;
+            id(buzzer).play("hwfail:d=4,o=3,b=80:c,p,c,p,c");
+            id(oled_display).show_page(id(page_splash));
+            id(oled_display).update();
+          } else if (x == "Boot Recovery") {
+            id(test_mode) = 3;
+            id(boot_fails) = 2;
+            delay(500);
+            App.safe_reboot();
+          } else {
+            if (id(test_mode) == 2) {
+              id(hw_error) = false;
+              id(fail_co2) = false;
+            }
+            id(test_mode) = 0;
+            id(test_step) = 0;
+          }
+
+interval:
+  - interval: 8s
+    then:
+      - lambda: |-
+          if (id(test_mode) != 1) return;
+
+          int step = id(test_step);
+          int w = 128;
+          int fx = 44, fy = 2;
+
+          auto &disp = *id(oled_display);
+
+          static const char* labels[] = {"Excellent", "Good", "Fair", "Poor", "Bad"};
+          static const char* tones[] = {
+            "good:d=16,o=6,b=180:c,e,g",
+            "ok:d=16,o=6,b=180:e,g",
+            "fair:d=16,o=5,b=160:a,a",
+            "poor:d=16,o=5,b=160:e,d,c",
+            "bad:d=8,o=4,b=120:c,p,c"
+          };
+
+          if (step >= 5) {
+            id(test_mode) = 0;
+            id(test_step) = 0;
+            auto call = id(test_scenario).make_call();
+            call.set_option("None");
+            call.perform();
+            return;
+          }
+
+          id(buzzer).play(tones[step]);
+          id(test_step) = step + 1;
