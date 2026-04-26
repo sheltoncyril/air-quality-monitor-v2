@@ -1,13 +1,5 @@
 # Air Quality Monitor — Task Tracker
 
-## In Progress
-
-### 002 — IAQ Stabilization Gate
-**Priority:** High
-**Status:** Planning
-**Why:** BSEC IAQ starts unreliable (accuracy 0-1) and takes minutes to hours to stabilize. Currently face/buzzer/HA scoring use IAQ immediately, showing misleading expressions and tones before data is trustworthy.
-**Design doc:** [002-iaq-stabilization-gate.md](002-iaq-stabilization-gate.md)
-
 ## Planned
 
 ### 003 — Debug Mode Firmware
@@ -17,6 +9,12 @@
 **Design doc:** TBD
 
 ## Completed
+
+### 002 — IAQ Stabilization Gate
+**Completed:** 2026-04-26
+**What:** Gate IAQ scoring on BSEC accuracy >= 2. Face shows "Cal." during warmup. CO2+PM2.5 drive scoring alone until BSEC stabilizes.
+**Design doc:** [002-iaq-stabilization-gate.md](002-iaq-stabilization-gate.md)
+**Release:** v1.3.0
 
 ### 001 — Unified Air Quality Scoring
 **Completed:** 2026-04-26

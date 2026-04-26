@@ -1,7 +1,7 @@
 # 002 — IAQ Stabilization Gate
 
 **Date:** 2026-04-26
-**Status:** Proposed
+**Status:** Implemented (v1.3.0)
 **Motivation:** BSEC IAQ values are unreliable during accuracy levels 0-1 (Stabilizing/Uncertain). Currently IAQ feeds into face expression, buzzer tones, and HA text immediately — before data is trustworthy. This causes misleading faces and false alerts during the first minutes/hours after boot.
 
 ---
@@ -102,11 +102,32 @@ if (!iaq_ready) {
   - Air quality text sensor (~line 690) — gate IAQ on accuracy
   - Ventilation binary sensor (~line 760) — gate IAQ on accuracy
 
+## Implementation Summary
+
+**Commit:** `428ff68` — feat: v1.3.0 — gate IAQ scoring on BSEC accuracy >= 2
+
+### What was done
+1. Added numeric `iaq_accuracy` sensor (`id: iaq_accuracy_num`, int 0-3) to bme690 sensor config — component already supported it, was just not configured in YAML
+2. Replaced `!isnan(iq)` guard with `iaq_ready` check in 4 locations:
+   - Face score lambda (line ~293) — determines face expression
+   - Buzzer alert lambda (line ~533) — determines alert tone
+   - Air quality text sensor lambda (line ~712) — HA status text
+   - Ventilation needed binary sensor lambda (line ~787) — HA binary alert
+3. Face page IAQ display shows "Cal." instead of raw number when `iaq_ready == false`
+4. `iaq_ready` defined as: `!isnan(iq) && !isnan(id(iaq_accuracy_num).state) && (int)id(iaq_accuracy_num).state >= 2`
+
+### What was NOT changed
+- Boot self-test — still only checks CO2/PM/BME temp. IAQ warmup is too slow to block boot.
+- Air Composition page — shows raw IAQ value always (diagnostic data page).
+- Environment page — already shows `iaq_accuracy_text` string.
+- BME690 IAQ Classification text sensor — already returns "Calibrating" for NaN.
+
+### Behavior after change
+- First ~5 minutes: face page shows "IAQ: Cal.", scoring uses CO2 + PM2.5 only
+- After BSEC accuracy >= 2: IAQ number appears, joins worst-of scoring
+- If BSEC drops back to accuracy 1 (rare, can happen): IAQ excluded again automatically
+
 ## Verification
-1. `esphome compile air-quality-monitor.yaml` — build succeeds
-2. Flash OTA, observe:
-   - Face page shows "Cal." for IAQ during first ~5 minutes
-   - Face expression based on CO2 + PM2.5 only during calibration
-   - Once accuracy hits 2+, IAQ value appears and scoring includes it
-3. Check HA — air_quality text shows Excellent/Good/etc. based on CO2+PM only during calibration
-4. Verify buzzer doesn't fire IAQ-based alerts during calibration period
+1. `esphome compile air-quality-monitor.yaml` — build succeeded
+2. OTA flash — successful
+3. Expected: face shows "Cal." during BSEC warmup, switches to numeric once stable

@@ -1,7 +1,7 @@
 # 001 — Unified Air Quality Scoring System
 
 **Date:** 2026-04-26
-**Status:** Proposed
+**Status:** Implemented (v1.2.0)
 **Motivation:** Face expression, buzzer tones, HA status text, and ventilation alert all use separate scoring systems with different thresholds. A single bad metric (e.g., CO2 >2000) doesn't trigger an appropriately bad face because the additive scoring dilutes individual severity.
 
 ---
@@ -185,10 +185,18 @@ Temperature + humidity could drive a **separate** comfort face or indicator on t
   - `air_quality` text sensor (~lines 667-677)
   - Ventilation needed binary sensor (~line 719)
 
-## Verification
-1. Build: `esphome compile air-quality-monitor.yaml`
-2. Manual threshold testing: inject known values via HA service calls or sensor overrides
-3. Verify face matches expected expression at each level boundary
-4. Verify buzzer only fires on level transitions
-5. Verify HA text sensor updates correctly
-6. Verify hysteresis prevents rapid toggling near boundaries
+## Implementation Summary
+
+**Commit:** `ff0fa22` — feat: v1.2.0 — unified worst-of air quality scoring
+
+### What was done
+1. Replaced additive 11-threshold face score with per-sensor level (0-4) + `max()` worst-of
+2. Replaced 6 independent Schmitt booleans in buzzer with per-sensor level tracking + hysteresis at each level boundary
+3. Replaced additive air_quality text sensor with same worst-of logic
+4. Replaced 3 OR conditions in ventilation binary with `level >= 2`
+5. Updated CO2 Status thresholds: Excellent/Good/Fair/Poor/Bad (was Good/Fair/Poor/Bad)
+6. Updated PM2.5 Status thresholds: aligned with EPA 2024 AQI breakpoints
+7. Removed X_X dead face from scoring — reserved for hardware errors only (5 expressions for 5 levels)
+
+### Key design decision
+Worst-of instead of additive means CO2=2000 alone → angry face (level 4), regardless of other sensors. Previously it scored only 3/11 = worried face.
